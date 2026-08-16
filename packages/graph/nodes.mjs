@@ -16,13 +16,13 @@ const lit = (v) => JSON.stringify(v)
 
 export const NODES = {
   'core/on_start': {
-    kind: 'event', fn: 'onStart', params: 'w: World'
+    kind: 'event', fn: 'onStart', params: 'w: World', paramsJs: 'w'
   },
   'core/on_tick': {
-    kind: 'event', fn: 'onTick', params: 'w: World, dt: number'
+    kind: 'event', fn: 'onTick', params: 'w: World, dt: number', paramsJs: 'w, dt'
   },
   'core/on_hit': {
-    kind: 'event', fn: 'onHit', params: 'w: World, e: Entity'
+    kind: 'event', fn: 'onHit', params: 'w: World, e: Entity', paramsJs: 'w, e'
   },
 
   'world/spawn': {

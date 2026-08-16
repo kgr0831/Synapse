@@ -1,0 +1,25 @@
+{
+  "spec": 1,
+  "name": "Orbital Drift",
+  "nodes": [
+    { "id": "01JA0START", "type": "core/on_start" },
+    { "id": "01JA1SPAWN", "type": "world/spawn", "pins": { "tag": "drone", "count": 4 } },
+    { "id": "01JA2SCATT", "type": "math/scatter", "pins": { "radius": 3 } },
+
+    { "id": "01JB0TICK",  "type": "core/on_tick" },
+    { "id": "01JB1ORBIT", "type": "world/orbit", "pins": { "tag": "drone", "speed": 1.9 } },
+
+    { "id": "01JC0HIT",   "type": "core/on_hit" },
+    { "id": "01JC1BOOST", "type": "entity/boost", "pins": { "mul": 1.8 } },
+    { "id": "01JC2TINT",  "type": "entity/tint",  "pins": { "ink": "signal" } }
+  ],
+  "edges": [
+    { "from": ["01JA0START", "exec"], "to": ["01JA1SPAWN", "exec"] },
+    { "from": ["01JA2SCATT", "out"],  "to": ["01JA1SPAWN", "at"] },
+
+    { "from": ["01JB0TICK", "exec"],  "to": ["01JB1ORBIT", "exec"] },
+
+    { "from": ["01JC0HIT", "exec"],   "to": ["01JC1BOOST", "exec"] },
+    { "from": ["01JC1BOOST", "exec"], "to": ["01JC2TINT", "exec"] }
+  ]
+}
