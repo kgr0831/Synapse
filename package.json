@@ -12,6 +12,7 @@
     "spike:s1": "node scripts/spike-capture.mjs"
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "playwright": "^1.62.1",
     "vite": "^8.2.1"
   }
