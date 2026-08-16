@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WebGPU Report</title>
+<meta name="description" content="What WebGPU your browser actually exposes: adapter, features, limits, shader probes and a frame-time benchmark.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15.4' fill='%23FF4B00'/%3E%3Cpath d='M8.6 23.4 L13.6 18.4M18.4 13.6 L23.4 8.6' stroke='%2312100E' stroke-width='4.2'/%3E%3Crect x='14' y='14' width='4' height='4' transform='rotate(45 16 16)' fill='%2300E0FF'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../../shared.css">
+<style>
+  .verdict{ padding:30px; border-bottom:2px solid var(--ink); }
+  .verdict h1{ font-family:var(--display); font-size:clamp(34px,5.4vw,68px);
+    text-transform:uppercase; line-height:.86; margin:10px 0 0; }
+  .verdict.yes{ background:var(--signal); }
+  .verdict.no{ background:var(--ink); color:var(--paper); }
+  .verdict p{ margin-top:14px; max-width:60ch; }
+  .grid2{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0; }
+  .grid2 > div:first-child{ padding-right:26px; border-right:2px solid var(--ink); }
+  .grid2 > div:last-child{ padding-left:26px; }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; margin-top:14px; }
+  .chip{ font-family:var(--code); font-size:11px; padding:4px 9px; border:1px solid var(--ink); }
+  .chip.on{ background:var(--ink); color:var(--paper); }
+  .acts{ display:flex; gap:10px; flex-wrap:wrap; margin-top:18px; }
+  .bench{ display:flex; gap:0; border:2px solid var(--ink); margin-top:16px; flex-wrap:wrap; }
+  .bench div{ flex:1 0 25%; padding:14px; border-right:1px solid var(--stone); }
+  .bench div:last-child{ border-right:0; }
+  .bench b{ display:block; font-family:var(--display); font-size:30px; line-height:1; }
+  .bench span{ display:block; margin-top:5px; }
+  #bencanvas{ display:block; width:100%; max-width:320px; height:180px;
+    background:#0A0908; border:2px solid var(--ink); margin-top:14px; }
+  .note{ margin-top:14px; color:#6B665C; }
+  @media (max-width:900px){
+    .grid2{ grid-template-columns:minmax(0,1fr); }
+    .grid2 > div:first-child{ padding-right:0; border-right:0; padding-bottom:22px;
+      border-bottom:2px solid var(--ink); }
+    .grid2 > div:last-child{ padding-left:0; padding-top:22px; }
+  }
+</style>
+</head>
+
+<body>
+
+<div class="spine" aria-hidden="true">
+  <div class="top">
+    <svg width="26" height="26" viewBox="0 0 32 32">
+      <circle cx="16" cy="16" r="15.4" fill="#FF4B00"/>
+      <path d="M8.6 23.4 L13.6 18.4" stroke="#12100E" stroke-width="4.2"/>
+      <path d="M18.4 13.6 L23.4 8.6" stroke="#12100E" stroke-width="4.2"/>
+      <rect x="14" y="14" width="4" height="4" transform="rotate(45 16 16)" fill="#00E0FF"/>
+    </svg>
+    <span class="rot micro">Synapse&trade; &nbsp;/&nbsp; SYN-DIAG-01</span>
+  </div>
+  <span class="rot micro bot">Device Report &nbsp;/&nbsp; Spike S2</span>
+</div>
+
+<div class="hud code">
+  <div>DIAG</div>
+  <div>UA <b id="h-ua">—</b></div>
+  <div>STATE <b id="h-state">probing</b></div>
+  <div class="push">DPR <b id="h-dpr">—</b></div>
+</div>
+
+<header class="nav">
+  <a class="brand" href="../../">
+    <svg width="26" height="26" viewBox="0 0 32 32" aria-label="Synapse">
+      <circle cx="16" cy="16" r="15.4" fill="#FF4B00"/>
+      <path d="M8.6 23.4 L13.6 18.4" stroke="#12100E" stroke-width="4.2"/>
+      <path d="M18.4 13.6 L23.4 8.6" stroke="#12100E" stroke-width="4.2"/>
+      <rect x="14" y="14" width="4" height="4" transform="rotate(45 16 16)" fill="#00E0FF"/>
+    </svg>
+    <span class="wm">Synapse<span class="tm">&trade;</span></span>
+  </a>
+  <a class="n" href="../../">← Back to the engine</a>
+</header>
+
+<main>
+
+<div class="verdict" id="verdict">
+  <span class="micro">Device report</span>
+  <h1 id="v-head">Checking WebGPU…</h1>
+  <p id="v-sub">Requesting an adapter. This takes a moment on first run.</p>
+</div>
+
+<!-- 01 ADAPTER -->
+<section class="entry">
+  <div class="gut">
+    <span class="no">01</span><span class="rule"></span>
+    <span class="desig">ADP</span><span class="micro">Adapter</span>
+  </div>
+  <div class="pane">
+    <div class="grid2">
+      <div>
+        <h2 class="h2" style="font-size:26px">What your browser admits to.</h2>
+        <p class="lede">Browsers mask adapter strings to varying degrees. This table is the whole
+          reason the spike exists: if it comes back empty everywhere, the compatibility grade has to
+          be keyed on feature and limit profiles instead of GPU names.</p>
+        <div class="scroll" style="margin-top:16px">
+          <table class="sheet"><tbody id="t-adapter">
+            <tr><td class="k">—</td><td class="v">waiting</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+      <div>
+        <span class="micro">Features exposed</span>
+        <div class="chips" id="c-features"><span class="chip">waiting</span></div>
+        <p class="note code" id="n-features"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 02 LIMITS -->
+<section class="entry dark">
+  <div class="gut">
+    <span class="no">02</span><span class="rule"></span>
+    <span class="desig">LIM</span><span class="micro">Limits</span>
+  </div>
+  <div class="pane">
+    <h2 class="h2" style="font-size:26px">Limits above the guaranteed minimum.</h2>
+    <p class="lede" style="color:var(--stone)">Every WebGPU implementation guarantees a floor. What
+      matters for a game is the headroom above it, so only the limits that exceed the spec default
+      are listed — with the multiple.</p>
+    <div class="scroll" style="margin-top:16px">
+      <table class="sheet">
+        <thead><tr><th>Limit</th><th>Default</th><th>Yours</th><th>×</th></tr></thead>
+        <tbody id="t-limits"><tr><td class="k">—</td><td class="v">waiting</td><td></td><td></td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 03 PROBES -->
+<section class="entry">
+  <div class="gut">
+    <span class="no">03</span><span class="rule"></span>
+    <span class="desig">SHD</span><span class="micro">Shaders</span>
+  </div>
+  <div class="pane">
+    <h2 class="h2" style="font-size:26px">Shaders that break on somebody's driver.</h2>
+    <p class="lede">Each probe compiles a small WGSL module known to be uneven across
+      implementations. A failure here is exactly the kind of thing a creator finds out from an
+      angry email instead of a table.</p>
+    <div class="scroll" style="margin-top:16px">
+      <table class="sheet">
+        <thead><tr><th>Probe</th><th>Tests</th><th>Result</th></tr></thead>
+        <tbody id="t-probes"><tr><td class="k">—</td><td>waiting</td><td></td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 04 BENCH -->
+<section class="entry">
+  <div class="gut">
+    <span class="no">04</span><span class="rule"></span>
+    <span class="desig">BCH</span><span class="micro">Benchmark</span>
+  </div>
+  <div class="pane">
+    <div class="grid2">
+      <div>
+        <h2 class="h2" style="font-size:26px">180 frames of the same work.</h2>
+        <p class="lede">A fixed fragment load at a fixed resolution, so numbers from different
+          machines mean something next to each other. It is not your game's frame rate; it is a
+          comparable unit.</p>
+        <div class="acts">
+          <button class="btn" id="b-run" type="button" disabled>Run benchmark</button>
+        </div>
+        <canvas id="bencanvas" width="640" height="360"></canvas>
+      </div>
+      <div>
+        <div class="bench">
+          <div><b class="num" id="b-avg">—</b><span class="micro">Avg ms</span></div>
+          <div><b class="num" id="b-p50">—</b><span class="micro">p50 ms</span></div>
+          <div><b class="num" id="b-p95">—</b><span class="micro">p95 ms</span></div>
+          <div><b class="num" id="b-first">—</b><span class="micro">First frame ms</span></div>
+        </div>
+        <p class="note code">Frame timing is wall clock from requestAnimationFrame, not a GPU
+          timestamp query. Treat it as an order of magnitude, not a profiler reading.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 05 REPORT -->
+<section class="entry dark">
+  <div class="gut">
+    <span class="no">05</span><span class="rule"></span>
+    <span class="desig">RPT</span><span class="micro">Report</span>
+  </div>
+  <div class="pane">
+    <h2 class="h2" style="font-size:26px">Send it in.</h2>
+    <p class="lede" style="color:var(--stone)">There is no server here yet, so a report travels as a
+      GitHub issue you can read before it is sent. Nothing leaves this page on its own.</p>
+    <div class="acts">
+      <button class="btn" id="b-copy" type="button" style="background:var(--paper);color:var(--ink);border-color:var(--paper)">Copy report</button>
+      <a class="btn" id="b-issue" href="#" target="_blank" rel="noopener"
+         style="background:var(--signal);color:var(--ink);border-color:var(--signal)">Open a GitHub issue</a>
+    </div>
+    <div class="codeblk" style="margin-top:16px;max-height:280px" id="out">{}</div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <p class="legal">
+    Synapse&trade; device report. This page reads only what the WebGPU API exposes to any website:
+    adapter strings, feature and limit values, shader compilation results, and frame timings it
+    measures itself. It sends nothing anywhere. Submitting a report opens a pre-filled GitHub issue
+    which you can review, edit, or close without posting. SYN-DIAG-01 · Spike S2.
+  </p>
+</footer>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const REPO = "kgr0831/Synapse";
+
+/* WebGPU spec defaults — a limit only earns a row if it beats these. */
+const DEFAULTS = {
+  maxTextureDimension1D: 8192, maxTextureDimension2D: 8192, maxTextureDimension3D: 2048,
+  maxTextureArrayLayers: 256, maxBindGroups: 4, maxBindingsPerBindGroup: 1000,
+  maxDynamicUniformBuffersPerPipelineLayout: 8, maxDynamicStorageBuffersPerPipelineLayout: 4,
+  maxSampledTexturesPerShaderStage: 16, maxSamplersPerShaderStage: 16,
+  maxStorageBuffersPerShaderStage: 8, maxStorageTexturesPerShaderStage: 4,
+  maxUniformBuffersPerShaderStage: 12, maxUniformBufferBindingSize: 65536,
+  maxStorageBufferBindingSize: 134217728, maxBufferSize: 268435456,
+  maxVertexBuffers: 8, maxVertexAttributes: 16, maxVertexBufferArrayStride: 2048,
+  maxColorAttachments: 8, maxComputeWorkgroupStorageSize: 16384,
+  maxComputeInvocationsPerWorkgroup: 256, maxComputeWorkgroupSizeX: 256,
+  maxComputeWorkgroupSizeY: 256, maxComputeWorkgroupSizeZ: 64,
+  maxComputeWorkgroupsPerDimension: 65535
+};
+
+const PROBES = [
+  { id: "baseline", tests: "Plain vertex + fragment module",
+    code: `@vertex fn vs(@builtin(vertex_index) i:u32)->@builtin(position) vec4f{
+      return vec4f(f32(i)*0.5-0.5, 0.5, 0.0, 1.0);}
+      @fragment fn fs()->@location(0) vec4f{ return vec4f(1.0,0.3,0.0,1.0); }` },
+  { id: "f16", tests: "half precision (needs shader-f16)", feature: "shader-f16",
+    code: `enable f16;
+      @compute @workgroup_size(1) fn main(){ var x:f16 = 1.5h; x = x * 2.0h; }` },
+  { id: "atomics", tests: "atomicAdd on a storage buffer",
+    code: `@group(0) @binding(0) var<storage, read_write> c: atomic<u32>;
+      @compute @workgroup_size(64) fn main(){ atomicAdd(&c, 1u); }` },
+  { id: "storage-texture", tests: "textureStore from compute",
+    code: `@group(0) @binding(0) var t: texture_storage_2d<rgba8unorm, write>;
+      @compute @workgroup_size(8,8) fn main(@builtin(global_invocation_id) g: vec3u){
+        textureStore(t, vec2i(g.xy), vec4f(1.0,0.0,0.0,1.0)); }` },
+  { id: "workgroup-256", tests: "workgroup_size(256)",
+    code: `@compute @workgroup_size(256) fn main(){ }` }
+];
+
+const BENCH_WGSL = `
+@vertex fn vs(@builtin(vertex_index) i:u32)->@builtin(position) vec4f{
+  var p = array(vec2f(-1,-1), vec2f(3,-1), vec2f(-1,3));
+  return vec4f(p[i], 0.0, 1.0);
+}
+@fragment fn fs(@builtin(position) c: vec4f)->@location(0) vec4f{
+  var acc = 0.0;
+  let uv = c.xy * 0.01;
+  for (var k = 0; k < 220; k = k + 1) {
+    acc = acc + sin(uv.x * f32(k)) * cos(uv.y * f32(k));
+  }
+  let v = fract(acc * 0.05);
+  return vec4f(v, v * 0.3, 1.0 - v, 1.0);
+}`;
+
+const report = {
+  spec: 1,
+  at: new Date().toISOString(),
+  ua: navigator.userAgent,
+  dpr: window.devicePixelRatio || 1,
+  webgpu: false,
+  adapter: null, features: [], limits: {}, probes: {}, bench: null, error: null
+};
+
+$("h-dpr").textContent = (window.devicePixelRatio || 1).toFixed(2) + "x";
+$("h-ua").textContent = (navigator.userAgentData?.brands?.[0]?.brand) ||
+  (navigator.userAgent.match(/(Firefox|Edg|Chrome|Safari)\/[\d.]+/)?.[0] ?? "unknown");
+
+function row(tbody, cells) {
+  const tr = document.createElement("tr");
+  cells.forEach((c, i) => {
+    const td = document.createElement("td");
+    td.className = i === 0 ? "k" : "v";
+    if (c instanceof Node) td.appendChild(c); else td.textContent = c;
+    tr.appendChild(td);
+  });
+  tbody.appendChild(tr);
+}
+function stamp(kind, text) {
+  const s = document.createElement("span");
+  s.className = "stamp " + kind;
+  s.textContent = text;
+  return s;
+}
+function fail(head, sub) {
+  $("verdict").className = "verdict no";
+  $("v-head").textContent = head;
+  $("v-sub").textContent = sub;
+  $("h-state").textContent = "unsupported";
+  refreshOut();
+}
+function refreshOut() {
+  const json = JSON.stringify(report, null, 1);
+  $("out").textContent = json;
+  const body = "```json\n" + JSON.stringify(report) + "\n```";
+  $("b-issue").href = `https://github.com/${REPO}/issues/new?labels=compat-report`
+    + `&title=${encodeURIComponent("WebGPU report: " + $("h-ua").textContent)}`
+    + `&body=${encodeURIComponent(body)}`;
+}
+
+$("b-copy").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
+    $("b-copy").textContent = "Copied";
+  } catch { $("b-copy").textContent = "Select the text below instead"; }
+});
+
+let device = null;
+
+async function main() {
+  refreshOut();
+  if (!navigator.gpu) {
+    report.error = "navigator.gpu is undefined";
+    return fail("No WebGPU here.", "This browser does not expose the API at all. That is a valid data point — send the report.");
+  }
+
+  let adapter;
+  try {
+    adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+  } catch (e) { report.error = String(e); }
+  if (!adapter) {
+    report.error = report.error || "requestAdapter returned null";
+    return fail("The API is here, but no adapter is.", "Usually a blocklisted driver or a headless context. Send the report — this case is exactly what the grade C fallback exists for.");
+  }
+
+  report.webgpu = true;
+  const info = adapter.info || {};
+  report.adapter = {
+    vendor: info.vendor || "", architecture: info.architecture || "",
+    device: info.device || "", description: info.description || "",
+    subgroupMinSize: info.subgroupMinSize ?? null, subgroupMaxSize: info.subgroupMaxSize ?? null
+  };
+
+  const tb = $("t-adapter"); tb.innerHTML = "";
+  const named = Object.entries(report.adapter).filter(([, v]) => v !== null && v !== "");
+  if (!named.length) row(tb, ["(all fields)", "masked by this browser"]);
+  else named.forEach(([k, v]) => row(tb, [k, String(v)]));
+
+  report.features = [...adapter.features].sort();
+  const fc = $("c-features"); fc.innerHTML = "";
+  if (!report.features.length) fc.innerHTML = "<span class='chip'>none</span>";
+  report.features.forEach(f => {
+    const s = document.createElement("span"); s.className = "chip on"; s.textContent = f; fc.appendChild(s);
+  });
+  $("n-features").textContent = `${report.features.length} optional feature(s) beyond the core set.`;
+
+  const lt = $("t-limits"); lt.innerHTML = "";
+  let above = 0;
+  for (const key of Object.keys(DEFAULTS).sort()) {
+    const got = adapter.limits[key];
+    if (typeof got !== "number") continue;
+    report.limits[key] = got;
+    const def = DEFAULTS[key];
+    if (got > def) {
+      above++;
+      row(lt, [key, def.toLocaleString(), got.toLocaleString(), (got / def).toFixed(1) + "×"]);
+    }
+  }
+  if (!above) row(lt, ["(none)", "—", "every limit sits at the spec default", ""]);
+
+  try {
+    device = await adapter.requestDevice({ requiredFeatures: report.features });
+  } catch {
+    try { device = await adapter.requestDevice(); } catch (e) { report.error = String(e); }
+  }
+  if (!device) return fail("Adapter found, device refused.", "The adapter exists but a device could not be created. Send the report.");
+
+  device.addEventListener?.("uncapturederror", (e) => { report.error = String(e.error); refreshOut(); });
+
+  const pt = $("t-probes"); pt.innerHTML = "";
+  for (const p of PROBES) {
+    let verdict = "pass", detail = "";
+    if (p.feature && !report.features.includes(p.feature)) {
+      verdict = "unsupported"; detail = "feature not exposed";
+    } else {
+      try {
+        const mod = device.createShaderModule({ code: p.code });
+        const ci = await mod.getCompilationInfo();
+        const errs = ci.messages.filter(m => m.type === "error");
+        if (errs.length) { verdict = "fail"; detail = errs[0].message.slice(0, 80); }
+      } catch (e) { verdict = "fail"; detail = String(e).slice(0, 80); }
+    }
+    report.probes[p.id] = { verdict, detail };
+    const kind = verdict === "pass" ? "s-pass" : verdict === "fail" ? "s-fail" : "s-warn";
+    row(pt, [p.id, p.tests + (detail ? " — " + detail : ""), stamp(kind, verdict)]);
+  }
+
+  const nice = report.adapter.description || report.adapter.architecture ||
+               report.adapter.vendor || "an adapter it will not name";
+  $("verdict").className = "verdict yes";
+  $("v-head").textContent = "WebGPU is here.";
+  $("v-sub").textContent = `Your browser reports ${nice}, ${report.features.length} optional feature(s), and ${above} limit(s) above the guaranteed floor. Run the benchmark, then send the report.`;
+  $("h-state").textContent = "ready";
+  $("b-run").disabled = false;
+  refreshOut();
+}
+
+$("b-run").addEventListener("click", async () => {
+  const btn = $("b-run");
+  btn.disabled = true; btn.textContent = "Running…";
+  try {
+    const canvas = $("bencanvas");
+    const ctx = canvas.getContext("webgpu");
+    const format = navigator.gpu.getPreferredCanvasFormat();
+    ctx.configure({ device, format, alphaMode: "opaque" });
+    const mod = device.createShaderModule({ code: BENCH_WGSL });
+    const pipe = device.createRenderPipeline({
+      layout: "auto",
+      vertex: { module: mod, entryPoint: "vs" },
+      fragment: { module: mod, entryPoint: "fs", targets: [{ format }] },
+      primitive: { topology: "triangle-list" }
+    });
+
+    const times = [];
+    const t0 = performance.now();
+    let firstFrame = null, last = t0, stalled = false;
+
+    /* Browsers suspend requestAnimationFrame in background tabs, so without a
+       watchdog this sits on "Running…" forever and reads as a hang. */
+    await new Promise((resolve) => {
+      let n = 0;
+      const watchdog = setTimeout(() => { stalled = true; resolve(); }, 12000);
+      const frame = (now) => {
+        if (firstFrame === null) firstFrame = now - t0;
+        else times.push(now - last);
+        last = now;
+        const enc = device.createCommandEncoder();
+        const pass = enc.beginRenderPass({
+          colorAttachments: [{
+            view: ctx.getCurrentTexture().createView(),
+            clearValue: { r: 0.04, g: 0.035, b: 0.03, a: 1 },
+            loadOp: "clear", storeOp: "store"
+          }]
+        });
+        pass.setPipeline(pipe); pass.draw(3); pass.end();
+        device.queue.submit([enc.finish()]);
+        if (++n < 180) requestAnimationFrame(frame);
+        else { clearTimeout(watchdog); resolve(); }
+      };
+      requestAnimationFrame(frame);
+    });
+
+    if (stalled && times.length < 30) {
+      report.bench = { aborted: true, frames: times.length,
+        reason: "requestAnimationFrame stalled — tab was not in the foreground" };
+      btn.textContent = "Keep this tab in front, then run again";
+      btn.disabled = false;
+      refreshOut();
+      return;
+    }
+
+    const sorted = times.slice().sort((a, b) => a - b);
+    const pick = (q) => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))] ?? 0;
+    const avg = times.reduce((a, b) => a + b, 0) / (times.length || 1);
+    report.bench = {
+      frames: times.length, avgMs: +avg.toFixed(2),
+      p50Ms: +pick(0.5).toFixed(2), p95Ms: +pick(0.95).toFixed(2),
+      firstFrameMs: +firstFrame.toFixed(2), width: canvas.width, height: canvas.height
+    };
+    $("b-avg").textContent = report.bench.avgMs;
+    $("b-p50").textContent = report.bench.p50Ms;
+    $("b-p95").textContent = report.bench.p95Ms;
+    $("b-first").textContent = report.bench.firstFrameMs;
+    btn.textContent = "Run again"; btn.disabled = false;
+  } catch (e) {
+    report.bench = { error: String(e) };
+    btn.textContent = "Benchmark failed";
+  }
+  refreshOut();
+});
+
+main().catch((e) => { report.error = String(e); fail("The probe itself fell over.", String(e)); });
+</script>
+
+</body>
+</html>

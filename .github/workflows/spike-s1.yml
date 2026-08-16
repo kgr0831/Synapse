@@ -1,0 +1,48 @@
+name: Spike S1 — headless WebGPU capture
+
+# Local runs answered half the question: on Windows, headless Chrome exposes
+# navigator.gpu but requestAdapter() returns null, while headed Chrome works.
+# The blocker is the missing display. This job checks whether Xvfb on a free
+# Ubuntu runner is enough to get an adapter — if it is, the capture worker
+# stays free (IMPL.md section 10.3).
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/spike-capture.mjs'
+      - '.github/workflows/spike-s1.yml'
+
+jobs:
+  spike:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: sudo apt-get install -y xvfb mesa-vulkan-drivers
+
+      - run: npm run build
+      - name: Serve the built site
+        run: nohup npx vite preview --port 4173 > preview.log 2>&1 &
+      - name: Wait for the server
+        run: |
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:4173/status/webgpu/ >/dev/null && exit 0
+            sleep 1
+          done
+          echo "preview server never came up:"; cat preview.log; exit 1
+
+      - name: Run spike under Xvfb
+        run: xvfb-run -a --server-args="-screen 0 1280x800x24" node scripts/spike-capture.mjs http://localhost:4173/status/webgpu/
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spike-s1
+          path: artifacts/spike-s1/
