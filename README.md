@@ -19,6 +19,15 @@ speak of yet — `web/index.html` is one self-contained file with inline CSS and
 here for the dev server and the localhost origin, not because anything needs compiling.
 That changes when the engine starts (see [PLAN.md](PLAN.md) §10).
 
+## Deploy
+
+Pushing to `main` deploys to GitHub Pages via `.github/workflows/pages.yml` — free, and no
+account beyond GitHub. Enable it once under **Settings → Pages → Source: GitHub Actions**.
+
+The site is served from a subpath, so the workflow builds with `--base=/Synapse/`. Local dev
+is unaffected. This host has no server side; it carries the static pages until uploads and
+auth arrive, at which point the plan moves to Cloudflare — see [IMPL.md](IMPL.md) §4.
+
 ## Layout
 
 | Path | What |
@@ -26,6 +35,7 @@ That changes when the engine starts (see [PLAN.md](PLAN.md) §10).
 | `web/index.html` | Landing page — source of truth |
 | `brand/` | Logo. Served at the site root by Vite |
 | [PLAN.md](PLAN.md) | Product and site plan: scope, roadmap, open decisions |
+| [IMPL.md](IMPL.md) | Engineering plan: risk spikes, milestones, frozen interfaces |
 | [DESIGN.md](DESIGN.md) | Visual system: inks, type, structure, components |
 | [CLAUDE.md](CLAUDE.md) | Working principles for agents on this repo |
 
