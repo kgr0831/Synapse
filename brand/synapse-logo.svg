@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Synapse">
+  <title>Synapse</title>
+  <!-- roundel: team badge in the Wipeout / TDR tradition -->
+  <circle cx="16" cy="16" r="15.4" fill="#FF4B00"/>
+  <!-- signal bar, broken at the synaptic gap -->
+  <path d="M8.6 23.4 L13.6 18.4" stroke="#12100E" stroke-width="4.2" stroke-linecap="butt"/>
+  <path d="M18.4 13.6 L23.4 8.6" stroke="#12100E" stroke-width="4.2" stroke-linecap="butt"/>
+  <!-- the signal in transit -->
+  <rect x="14" y="14" width="4" height="4" transform="rotate(45 16 16)" fill="#00E0FF"/>
+</svg>

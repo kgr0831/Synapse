@@ -1,0 +1,14 @@
+node_modules/
+dist/
+
+# vite
+.vite/
+*.local
+
+# secrets — MCP tokens and provider keys will land here
+.env
+.env.*
+
+# os / editor
+.DS_Store
+Thumbs.db

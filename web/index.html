@@ -1,0 +1,1161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Synapse</title>
+<meta name="description" content="A WebGPU game engine that lives in the browser. Build the game in a graph; let an agent edit the same graph you do.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15.4' fill='%23FF4B00'/%3E%3Cpath d='M8.6 23.4 L13.6 18.4M18.4 13.6 L23.4 8.6' stroke='%2312100E' stroke-width='4.2'/%3E%3Crect x='14' y='14' width='4' height='4' transform='rotate(45 16 16)' fill='%2300E0FF'/%3E%3C/svg%3E">
+<style>
+:root{
+  --paper:#EDEBE4;
+  --tint:#E1DED4;
+  --stone:#B7B2A4;
+  --ink:#12100E;
+  --orange:#FF4B00;
+  --cyan:#00E0FF;
+
+  --display: Haettenschweiler, Impact, "Franklin Gothic Heavy", "Arial Narrow", sans-serif;
+  --narrow: "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --body: Arial, Helvetica, sans-serif;
+  --code: "Courier New", "Nimbus Mono PS", monospace;
+
+  --spine:46px;
+}
+*{ box-sizing:border-box; }
+html{ background:var(--paper); }
+body{
+  margin:0; padding-left:var(--spine);
+  background:var(--paper); color:var(--ink);
+  font-family:var(--body); font-size:15px; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+p{ margin:0; }
+a{ color:inherit; text-decoration:none; }
+:focus-visible{ outline:3px solid var(--orange); outline-offset:2px; }
+
+/* ══ type devices ══════════════════════════════════════ */
+.code{ font-family:var(--code); font-size:11px; }
+.micro{ font-family:var(--narrow); font-size:10px; font-weight:700;
+  letter-spacing:.22em; text-transform:uppercase; }
+.desig{ font-family:var(--display); font-size:23px; text-transform:uppercase;
+  letter-spacing:.05em; line-height:1; }
+.disp{ font-family:var(--display); font-weight:400; text-transform:uppercase;
+  line-height:.84; letter-spacing:-.005em; margin:0; }
+.tm{ font-family:var(--body); font-size:.42em; vertical-align:.9em; letter-spacing:0; }
+.tab{ font-variant-numeric:tabular-nums; font-family:var(--narrow); }
+
+/* ══ spine ═════════════════════════════════════════════ */
+.spine{
+  position:fixed; left:0; top:0; bottom:0; width:var(--spine); z-index:20;
+  background:var(--ink); color:var(--paper);
+  display:flex; flex-direction:column; align-items:center; justify-content:space-between;
+  padding:14px 0;
+}
+.spine .rot{ writing-mode:vertical-rl; text-orientation:mixed; }
+.spine .top{ display:flex; flex-direction:column; align-items:center; gap:14px; }
+.spine .bot{ color:var(--stone); }
+
+/* ══ hud ═══════════════════════════════════════════════ */
+.hud{ position:sticky; top:0; z-index:15; background:var(--orange); color:var(--ink);
+  border-bottom:2px solid var(--ink); display:flex; align-items:center; height:32px; overflow:hidden; }
+.hud div{ padding:0 12px; white-space:nowrap; border-right:1px solid rgba(18,16,14,.35); }
+.hud div:first-child{ background:var(--ink); color:var(--orange); font-weight:700; }
+.hud .push{ margin-left:auto; border-right:0; border-left:1px solid rgba(18,16,14,.35); }
+.hud b{ font-weight:700; }
+
+/* ══ nav ═══════════════════════════════════════════════ */
+.nav{ display:flex; align-items:center; gap:26px; border-bottom:2px solid var(--ink);
+  padding:0 26px; height:52px; background:var(--paper); }
+.nav .brand{ display:flex; align-items:center; gap:9px; margin-right:8px; }
+.nav .brand .wm{ font-family:var(--display); font-size:26px; text-transform:uppercase; letter-spacing:-.01em; }
+.nav a.n{ font-family:var(--narrow); font-size:12px; font-weight:700;
+  letter-spacing:.18em; text-transform:uppercase; }
+.nav a.n:hover{ color:var(--orange); }
+.nav .end{ margin-left:auto; display:flex; align-items:center; height:100%; }
+.nav .end a{ display:flex; align-items:center; padding:0 18px; height:100%;
+  font-family:var(--narrow); font-size:12px; font-weight:700; letter-spacing:.18em;
+  text-transform:uppercase; border-left:2px solid var(--ink); }
+.nav .end a.go{ background:var(--ink); color:var(--paper); }
+.nav .end a.go:hover{ background:var(--orange); color:var(--ink); }
+
+/* ══ entry frame ═══════════════════════════════════════ */
+.entry{ display:grid; grid-template-columns:126px minmax(0,1fr); border-bottom:2px solid var(--ink); }
+.gut{ border-right:2px solid var(--ink); padding:20px 0 20px 14px;
+  display:flex; flex-direction:column; gap:10px; }
+.gut .no{ font-family:var(--display); font-size:46px; line-height:.8; }
+.gut .desig{ color:var(--orange); }
+.gut .micro{ color:#6B665C; }
+.gut .rule{ height:2px; background:var(--ink); width:34px; }
+.gut .state{ margin-top:auto; font-family:var(--narrow); font-size:10px; font-weight:700;
+  letter-spacing:.16em; text-transform:uppercase; padding:3px 7px; align-self:flex-start; }
+.st-live{ background:var(--ink); color:var(--paper); }
+.st-build{ background:var(--orange); color:var(--ink); }
+.st-plan{ border:1px solid var(--ink); }
+.pane{ padding:26px 30px 34px; min-width:0; }
+
+.entry.dark{ background:var(--ink); color:var(--paper); }
+.entry.dark .gut{ border-right-color:var(--paper); }
+.entry.dark .gut .micro{ color:var(--stone); }
+.entry.dark .gut .rule{ background:var(--orange); }
+.entry.dark .st-live{ background:var(--paper); color:var(--ink); }
+.entry.dark .st-plan{ border-color:var(--paper); }
+
+.h2{ font-family:var(--display); font-size:clamp(28px,4vw,50px); text-transform:uppercase;
+  line-height:.88; margin:0 0 14px; max-width:24ch; }
+.lede{ max-width:64ch; font-size:14.5px; }
+
+/* ══ 00 hero ═══════════════════════════════════════════ */
+.hero{ background:var(--orange); border-bottom:2px solid var(--ink); }
+.hero-in{ display:grid; grid-template-columns:minmax(0,1fr) minmax(320px,50%); }
+.hero-l{ padding:34px 30px 40px; border-right:2px solid var(--ink); }
+.hero h1{ font-size:clamp(42px,6.2vw,92px); margin:12px 0 0; }
+.hero h1 span{ display:block; }
+.hero h1 .pale{ color:var(--paper); }
+.hero .sub{ margin-top:22px; max-width:52ch; font-size:15px; }
+.hero .acts{ display:flex; margin-top:26px; border:2px solid var(--ink); width:max-content; max-width:100%; }
+.hero .acts a{ padding:12px 20px; font-family:var(--narrow); font-size:12px; font-weight:700;
+  letter-spacing:.18em; text-transform:uppercase; }
+.hero .acts a.p{ background:var(--ink); color:var(--orange); }
+.hero .acts a.p:hover{ background:var(--cyan); color:var(--ink); }
+.hero .acts a.s{ border-left:2px solid var(--ink); }
+.hero .acts a.s:hover{ background:var(--ink); color:var(--paper); }
+.hero .strip{ display:flex; margin-top:28px; border-top:2px solid var(--ink); }
+.hero .strip div{ flex:1; padding:12px 12px 0; border-right:1px solid rgba(18,16,14,.3); }
+.hero .strip div:last-child{ border-right:0; }
+.hero .strip b{ display:block; font-family:var(--display); font-size:26px; line-height:1; }
+.hero .strip span{ display:block; margin-top:4px; }
+
+/* ══ demo panel ════════════════════════════════════════ */
+.demo{ background:var(--ink); color:var(--paper); display:flex; flex-direction:column; }
+.demo-bar{ display:flex; align-items:center; gap:10px; padding:0 12px; height:28px;
+  border-bottom:1px solid #2E2A24; color:var(--stone); }
+.demo-bar .live{ margin-left:auto; padding:2px 8px; background:var(--cyan); color:var(--ink); font-weight:700; }
+.demo-bar .live.fb{ background:var(--orange); }
+canvas#stage{ display:block; width:100%; height:176px; background:#0A0908; }
+.tele{ display:flex; align-items:center; gap:10px; padding:5px 12px;
+  border-top:1px solid #2E2A24; border-bottom:1px solid #2E2A24; color:var(--stone); }
+.tele b{ color:var(--paper); font-weight:400; }
+.tele canvas{ margin-left:auto; width:120px; height:16px; display:block; }
+
+.graphwrap{ overflow-x:auto; border-bottom:1px solid #2E2A24; }
+.graph{ position:relative; width:440px; height:258px; margin:10px; }
+.graph svg{ position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+.node{ position:absolute; width:128px; background:var(--paper); color:var(--ink);
+  border:2px solid var(--ink); }
+.node.new{ outline:2px solid var(--cyan); outline-offset:2px; }
+.node h4{ margin:0; font-family:var(--display); font-size:14px; text-transform:uppercase;
+  letter-spacing:.04em; padding:3px 6px; line-height:1.25; }
+.node.evt h4{ background:var(--orange); }
+.node.act h4{ background:var(--ink); color:var(--paper); }
+.node.pure h4{ background:var(--tint); }
+.node .pin{ display:flex; align-items:center; gap:5px; padding:3px 6px;
+  border-top:1px solid var(--stone); font-family:var(--code); font-size:10px; }
+.node .pin s{ width:6px; height:6px; background:var(--ink); text-decoration:none; flex:none; }
+.node .pin em{ font-style:normal; margin-left:auto; font-weight:700; }
+
+.chips{ display:flex; flex-wrap:wrap; gap:6px; padding:10px 12px 8px; }
+.chips button{ font-family:var(--narrow); font-size:11px; font-weight:700; letter-spacing:.1em;
+  text-transform:uppercase; padding:6px 10px; background:transparent; color:var(--paper);
+  border:1px solid var(--stone); cursor:pointer; }
+.chips button:hover{ background:var(--paper); color:var(--ink); }
+.chips button[disabled]{ opacity:.35; cursor:default; }
+.chips button.reset{ margin-left:auto; border-color:#4A443B; color:var(--stone); }
+.log{ padding:0 12px 12px; min-height:44px; color:var(--stone); }
+.log div{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.log .ok{ color:var(--cyan); }
+.log .idle{ color:#5C564C; white-space:normal; }  /* prose, not a tool line — let it wrap */
+
+/* ══ graph / codegen (01) ══════════════════════════════ */
+.split{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:0; margin-top:20px; }
+.split > div:first-child{ padding-right:26px; border-right:2px solid var(--ink); }
+.split > div:last-child{ padding-left:26px; }
+.entry.dark .split > div:first-child{ border-right-color:var(--paper); }
+.codeblk{ background:var(--ink); color:var(--paper); padding:14px 16px; font-family:var(--code);
+  font-size:11.5px; line-height:1.7; overflow-x:auto; margin-top:12px; }
+.codeblk .c{ color:#6E675C; }
+.codeblk .k{ color:var(--orange); }
+.codeblk .s{ color:var(--cyan); }
+.entry.dark .codeblk{ background:#1D1915; }
+.pt{ display:grid; gap:14px; margin-top:18px; }
+.pt > div{ display:grid; grid-template-columns:16px minmax(0,1fr); gap:12px; align-items:start; }
+.pt i{ width:10px; height:10px; background:var(--orange); margin-top:6px; }
+.pt b{ display:block; font-family:var(--narrow); font-size:14px; letter-spacing:.04em;
+  text-transform:uppercase; }
+.pt span{ display:block; font-size:13.5px; color:#4A453D; max-width:64ch; }
+.entry.dark .pt span{ color:var(--stone); }
+
+/* ══ tables ════════════════════════════════════════════ */
+.scroll{ overflow-x:auto; }
+.sheet{ width:100%; border-collapse:collapse; margin-top:18px; }
+.sheet th,.sheet td{ text-align:left; padding:9px 12px; border-bottom:1px solid var(--stone); white-space:nowrap; }
+.sheet th{ font-family:var(--narrow); font-size:10px; font-weight:700; letter-spacing:.2em;
+  text-transform:uppercase; color:#6B665C; border-bottom:2px solid var(--ink); }
+.entry.dark .sheet th{ color:var(--stone); border-bottom-color:var(--paper); }
+.entry.dark .sheet th,.entry.dark .sheet td{ border-bottom-color:#38322B; }
+.sheet td.dev{ font-family:var(--narrow); font-size:14px; }
+.sheet td.dev em{ font-style:normal; color:#6B665C; display:block; font-size:11px; letter-spacing:.06em; }
+.entry.dark .sheet td.dev em{ color:var(--stone); }
+.sheet td.n{ font-family:var(--narrow); font-variant-numeric:tabular-nums; font-size:14px; }
+.sheet td.tool{ font-family:var(--code); font-size:12px; }
+.stamp{ font-family:var(--narrow); font-size:11px; font-weight:700; letter-spacing:.16em;
+  padding:3px 9px; display:inline-block; text-transform:uppercase; }
+.s-pass{ background:var(--cyan); color:var(--ink); }
+.s-warn{ background:var(--orange); color:var(--ink); }
+.s-fail{ color:var(--ink); border:1px solid var(--ink);
+  background:repeating-linear-gradient(45deg, rgba(18,16,14,.28) 0 3px, transparent 3px 7px); }
+.entry.dark .s-fail{ color:var(--paper); border-color:var(--paper);
+  background:repeating-linear-gradient(45deg, rgba(237,235,228,.3) 0 3px, transparent 3px 7px); }
+.foot-note{ margin-top:14px; color:#6B665C; max-width:74ch; }
+.entry.dark .foot-note{ color:var(--stone); }
+
+.meter{ display:inline-flex; gap:2px; vertical-align:middle; }
+.meter i{ width:6px; height:13px; background:var(--stone); }
+.meter i.on{ background:var(--ink); }
+.meter.o i.on{ background:var(--orange); }
+.entry.dark .meter i{ background:#39332B; }
+.entry.dark .meter i.on{ background:var(--cyan); }
+.entry.dark .meter.o i.on{ background:var(--orange); }
+
+/* ══ report (03) ═══════════════════════════════════════ */
+.rep-head{ display:flex; align-items:baseline; gap:12px; border-bottom:2px solid var(--ink); padding-bottom:8px; }
+.entry.dark .rep-head{ border-bottom-color:var(--paper); }
+.rep-head .t{ font-family:var(--display); font-size:20px; text-transform:uppercase; }
+.rep-head .c{ margin-left:auto; }
+.rep{ border-bottom:1px solid var(--stone); padding:11px 0; display:grid;
+  grid-template-columns:58px minmax(0,1fr) auto; gap:12px; align-items:baseline; }
+.entry.dark .rep{ border-bottom-color:#38322B; }
+.rep:last-child{ border-bottom:0; }
+.rep b{ display:block; font-family:var(--narrow); font-size:14px; font-weight:700; }
+.rep span.d{ display:block; color:#57524A; font-size:12.5px; }
+.entry.dark .rep span.d{ color:var(--stone); }
+.rep .v{ font-family:var(--narrow); font-weight:700; font-variant-numeric:tabular-nums; }
+
+/* ══ catalogue (04) ════════════════════════════════════ */
+.cat{ display:grid; grid-template-columns:repeat(3,1fr); border-top:2px solid var(--ink);
+  border-left:2px solid var(--ink); margin-top:20px; }
+.card{ border-right:2px solid var(--ink); border-bottom:2px solid var(--ink); }
+.livery{ height:96px; position:relative; display:flex; align-items:flex-end; padding:10px 12px;
+  border-bottom:2px solid var(--ink); }
+.livery .rd{ position:absolute; top:10px; right:10px; width:28px; height:28px; }
+.livery .cd{ font-family:var(--display); font-size:24px; text-transform:uppercase; line-height:.85; }
+.card .meta{ padding:12px; display:grid; gap:8px; }
+.card .nm{ font-family:var(--display); font-size:22px; text-transform:uppercase; line-height:.9; }
+.card .rn{ color:#57524A; }
+.card .stat{ display:flex; align-items:center; gap:8px; }
+.card .stat .micro{ width:68px; flex:none; color:#6B665C; }
+
+/* ══ system (05) ═══════════════════════════════════════ */
+.sys{ display:grid; grid-template-columns:repeat(4,1fr); border-left:2px solid var(--ink); margin-top:18px; }
+.sys > div{ border-right:2px solid var(--ink); padding:16px 14px 18px; display:grid; gap:9px; align-content:start; }
+.sys .ph{ font-family:var(--display); font-size:38px; line-height:.8; }
+.sys h3{ font-family:var(--display); font-size:20px; text-transform:uppercase; margin:0; line-height:.9; }
+.sys p{ font-size:13px; color:#4A453D; }
+.sys .flag{ justify-self:start; font-family:var(--narrow); font-size:10px; font-weight:700;
+  letter-spacing:.18em; text-transform:uppercase; padding:3px 8px; }
+.sys .chk{ border-top:1px solid var(--stone); padding-top:9px; color:#57524A; }
+
+/* ══ identity (06) ═════════════════════════════════════ */
+.idg{ display:grid; grid-template-columns:repeat(3,1fr); border-left:2px solid var(--ink); margin-top:20px; }
+.idg > div{ border-right:2px solid var(--ink); padding:20px; display:grid; gap:16px; align-content:start; }
+.lock{ display:flex; align-items:center; gap:12px; }
+.lock .wm{ font-family:var(--display); font-size:38px; text-transform:uppercase; line-height:.8; }
+.on-o{ background:var(--orange); padding:14px; display:flex; align-items:center; gap:10px; }
+.on-k{ background:var(--ink); padding:14px; display:flex; align-items:center; gap:10px; color:var(--paper); }
+.on-k .wm,.on-o .wm{ font-size:26px; }
+.swatches{ display:flex; gap:8px; flex-wrap:wrap; }
+.sw{ padding:9px 10px; font-family:var(--code); font-size:10px; line-height:1.35; }
+
+/* ══ close / footer ════════════════════════════════════ */
+.close{ background:var(--ink); color:var(--paper); padding:44px 30px; display:flex;
+  align-items:center; gap:30px; flex-wrap:wrap; border-bottom:2px solid var(--ink); }
+.close h2{ font-family:var(--display); font-size:clamp(30px,5vw,60px); text-transform:uppercase;
+  margin:0; line-height:.86; max-width:17ch; }
+.close .go{ margin-left:auto; display:flex; border:2px solid var(--paper); }
+.close .go a{ padding:14px 22px; font-family:var(--narrow); font-size:12px; font-weight:700;
+  letter-spacing:.18em; text-transform:uppercase; }
+.close .go a.p{ background:var(--orange); color:var(--ink); }
+.close .go a.s{ border-left:2px solid var(--paper); }
+.close .go a.s:hover{ background:var(--paper); color:var(--ink); }
+footer{ padding:22px 30px 44px; display:grid; gap:16px; }
+.fl{ display:flex; gap:24px; flex-wrap:wrap; align-items:center; }
+.fl a{ font-family:var(--narrow); font-size:11px; font-weight:700; letter-spacing:.18em; text-transform:uppercase; }
+.fl a:hover{ color:var(--orange); }
+.legal{ max-width:90ch; color:#6B665C; font-family:var(--narrow); font-size:10px;
+  letter-spacing:.1em; text-transform:uppercase; line-height:1.9; }
+
+/* ══ responsive ════════════════════════════════════════ */
+@media (max-width:1060px){
+  /* single columns must be minmax(0,1fr): a bare 1fr keeps min-width:auto and
+     nowrap tables refuse to shrink, pushing the page sideways */
+  .hero-in{ grid-template-columns:minmax(0,1fr); }
+  .hero-l{ border-right:0; border-bottom:2px solid var(--ink); }
+  .split{ grid-template-columns:minmax(0,1fr); }
+  .split > div:first-child{ padding-right:0; border-right:0; padding-bottom:22px;
+    border-bottom:2px solid var(--ink); }
+  .entry.dark .split > div:first-child{ border-bottom-color:var(--paper); }
+  .split > div:last-child{ padding-left:0; padding-top:22px; }
+  .cat,.sys,.idg{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:660px){
+  body{ padding-left:0; }
+  .spine{ display:none; }
+  .entry{ grid-template-columns:minmax(0,1fr); }
+  .hud div:nth-child(2),.hud .push{ display:none; }
+  .gut{ border-right:0; border-bottom:2px solid var(--ink); flex-direction:row;
+    align-items:center; gap:12px; padding:10px 16px; }
+  .gut .rule{ display:none; }
+  .gut .no{ font-size:28px; }
+  .gut .state{ margin-top:0; margin-left:auto; }
+  .entry.dark .gut{ border-bottom-color:var(--paper); }
+  .pane{ padding:20px 16px 26px; }
+  .hero-l{ padding:24px 16px 30px; }
+  .cat,.sys,.idg{ grid-template-columns:minmax(0,1fr); }
+  .nav{ padding:0 14px; gap:14px; }
+  .nav a.n{ display:none; }
+  .hero .strip{ flex-wrap:wrap; }
+  .hero .strip div{ flex:1 0 50%; }
+}
+@media (prefers-reduced-motion:reduce){ *{ animation:none !important; transition:none !important; } }
+</style>
+</head>
+
+<body>
+
+<div class="spine" aria-hidden="true">
+  <div class="top">
+    <svg width="26" height="26" viewBox="0 0 32 32">
+      <circle cx="16" cy="16" r="15.4" fill="#FF4B00"/>
+      <path d="M8.6 23.4 L13.6 18.4" stroke="#12100E" stroke-width="4.2"/>
+      <path d="M18.4 13.6 L23.4 8.6" stroke="#12100E" stroke-width="4.2"/>
+      <rect x="14" y="14" width="4" height="4" transform="rotate(45 16 16)" fill="#00E0FF"/>
+    </svg>
+    <span class="rot micro">Synapse&trade; &nbsp;/&nbsp; SYN-SYS-01</span>
+  </div>
+  <span class="rot micro bot">WebGPU Game Engine &nbsp;/&nbsp; Sheet 1 of 1 &nbsp;/&nbsp; Rev D</span>
+</div>
+
+<div class="hud code">
+  <div>LIVE</div>
+  <div>SESSION <b id="r-session">------</b></div>
+  <div>BACKEND <b id="r-backend">probing</b></div>
+  <div>FRAME <b id="r-frame">--.- ms</b></div>
+  <div class="push">DPR <b id="r-dpr">-</b></div>
+</div>
+
+<header class="nav">
+  <a class="brand" href="#top">
+    <svg width="26" height="26" viewBox="0 0 32 32" aria-label="Synapse">
+      <circle cx="16" cy="16" r="15.4" fill="#FF4B00"/>
+      <path d="M8.6 23.4 L13.6 18.4" stroke="#12100E" stroke-width="4.2"/>
+      <path d="M18.4 13.6 L23.4 8.6" stroke="#12100E" stroke-width="4.2"/>
+      <rect x="14" y="14" width="4" height="4" transform="rotate(45 16 16)" fill="#00E0FF"/>
+    </svg>
+    <span class="wm">Synapse<span class="tm">&trade;</span></span>
+  </a>
+  <a class="n" href="#e01">Graph</a>
+  <a class="n" href="#e02">Agents</a>
+  <a class="n" href="#e03">Runtime</a>
+  <a class="n" href="#e05">System</a>
+  <div class="end">
+    <a href="#top">Sign in</a>
+    <a class="go" href="#e02">Connect an agent</a>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ══ 00 ══════════════════════════════════════════════ -->
+<section class="hero">
+  <div class="hero-in">
+    <div class="hero-l">
+      <span class="micro">Entry 00 &nbsp;/&nbsp; SYN-SYS-01 &nbsp;/&nbsp; Engine in build</span>
+      <h1 class="disp">
+        <span>Build the game</span>
+        <span class="pale">in a graph.</span>
+        <span>Let the agent</span>
+        <span class="pale">edit it too.</span>
+      </h1>
+      <p class="sub">
+        A WebGPU engine that lives in the browser. You wire the game together as a node graph;
+        an agent connected over MCP edits that same graph through the same operations you use —
+        then runs the game headlessly to check it actually works before handing it back.
+      </p>
+      <div class="acts">
+        <a class="p" href="#e01">Open the graph</a>
+        <a class="s" href="#e02">Connect an agent</a>
+      </div>
+      <div class="strip">
+        <div><b class="tab">4</b><span class="micro">Graph node kinds</span></div>
+        <div><b class="tab">11</b><span class="micro">MCP operations</span></div>
+        <div><b class="tab">1,847</b><span class="micro">GPUs measured</span></div>
+        <div><b class="tab">312</b><span class="micro">Builds hosted</span></div>
+      </div>
+    </div>
+
+    <div class="demo">
+      <div class="demo-bar code">
+        <span>graph.json</span><span>SYN-04</span>
+        <span class="live" id="vp-tag">CHECKING</span>
+      </div>
+      <canvas id="stage" width="620" height="176"></canvas>
+      <div class="tele code">
+        <span>ADAPTER <b id="r-adapter">detecting</b></span>
+        <span>1% LOW <b id="r-low">--</b></span>
+        <canvas id="spark" width="120" height="16"></canvas>
+      </div>
+
+      <div class="graphwrap">
+        <div class="graph" id="graph">
+          <svg id="wires" viewBox="0 0 440 258" preserveAspectRatio="none"></svg>
+        </div>
+      </div>
+
+      <div class="chips">
+        <button type="button" data-step="1">Spawn three more</button>
+        <button type="button" data-step="2">React to hits</button>
+        <button type="button" data-step="3">Flash on impact</button>
+        <button type="button" class="reset" data-step="0">Reset</button>
+      </div>
+      <div class="log code" id="log">
+        <div class="idle">Pick a prompt. The graph edit and the running game are real; only the agent's reply is scripted.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 01 GRAPH ════════════════════════════════════════ -->
+<section class="entry dark" id="e01">
+  <div class="gut">
+    <span class="no">01</span><span class="rule"></span>
+    <span class="desig">GRF</span><span class="micro">Graph</span>
+    <span class="state st-build">In build</span>
+  </div>
+  <div class="pane">
+    <h2 class="h2">The graph is the source. The TypeScript is output.</h2>
+    <p class="lede" style="color:var(--stone)">
+      Round-tripping code back into nodes is where visual scripting tools die — half of it works, and
+      then you lose data between two sources of truth. So we do not do it. The graph compiles one way,
+      into TypeScript you can read but not edit, and the escape hatch is a Script node whose contents
+      the compiler never touches.
+    </p>
+    <div class="split">
+      <div>
+        <div class="pt">
+          <div><i></i><div><b>Stable node identity</b><span>Every node carries a ULID, so moving it never changes the diff. Meaning lives in graph.json, coordinates in layout.json — an agent adding a node does not churn your positions.</span></div></div>
+          <div><i></i><div><b>Deterministic serialisation</b><span>Sorted keys, fixed float precision. The same graph produces the same bytes, which is what makes review and merge possible at all.</span></div></div>
+          <div><i></i><div><b>One document, two editors</b><span>Human edits and agent edits are the same operations on a CRDT document, so they merge instead of collide — and one undo stack covers both.</span></div></div>
+        </div>
+      </div>
+      <div>
+        <span class="micro" style="color:var(--stone)">Generated — read only</span>
+        <div class="codeblk">
+<span class="c">// generated from graph.json · SYN-04 · do not edit</span><br>
+<span class="k">export function</span> onStart(w: World) {<br>
+&nbsp;&nbsp;<span class="k">const</span> p = scatter({ radius: <span class="s">3.0</span> });<br>
+&nbsp;&nbsp;spawn(w, <span class="s">"drone"</span>, { count: <span class="s">4</span>, at: p });<br>
+}<br><br>
+<span class="k">export function</span> onTick(w: World, dt: number) {<br>
+&nbsp;&nbsp;orbit(w, tag(<span class="s">"drone"</span>), { speed: <span class="s">1.0</span> * dt });<br>
+}<br><br>
+<span class="k">export function</span> onHit(w: World, e: Entity) {<br>
+&nbsp;&nbsp;boost(e, <span class="s">1.8</span>);<br>
+&nbsp;&nbsp;tint(e, <span class="s">"signal"</span>);<br>
+}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 02 AGENTS ═══════════════════════════════════════ -->
+<section class="entry" id="e02">
+  <div class="gut">
+    <span class="no">02</span><span class="rule"></span>
+    <span class="desig">AGT</span><span class="micro">Agents</span>
+    <span class="state st-plan">Planned</span>
+  </div>
+  <div class="pane">
+    <h2 class="h2">An agent gets operations, not a filesystem.</h2>
+    <p class="lede">
+      Synapse exposes the project over MCP. There is no write-file tool — an agent adds a node,
+      connects a pin, sets a component. It cannot corrupt the document because it never sees the
+      document's syntax. Works from Claude Code, Cursor, or the panel inside the editor when your
+      machine won't run a CLI at all.
+    </p>
+
+    <div class="split">
+      <div>
+        <div class="scroll">
+          <table class="sheet">
+            <thead><tr><th>Operation</th><th>Does</th></tr></thead>
+            <tbody>
+              <tr><td class="tool">project.overview</td><td>Scene, graph and asset tree — the first call</td></tr>
+              <tr><td class="tool">search</td><td>Project symbols, docs and templates, with citations</td></tr>
+              <tr><td class="tool">graph.patch</td><td>add_node · connect · set_pin_default · delete</td></tr>
+              <tr><td class="tool">scene.patch</td><td>add_entity · set_component · reparent</td></tr>
+              <tr><td class="tool">asset.import</td><td>glTF and textures, metadata extracted</td></tr>
+              <tr><td class="tool">build.run</td><td>Errors returned against node IDs, not file lines</td></tr>
+              <tr><td class="tool">test.headless</td><td>N frames on a fixed input trace, then assert</td></tr>
+              <tr><td class="tool">history.revert</td><td>Every mutation checkpoints first</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="foot-note code">publish is deliberately absent. A person presses that button.</p>
+      </div>
+      <div>
+        <div class="pt">
+          <div><i></i><div><b>Verification is the point</b><span>Without a way to check its own work an agent produces a plausible graph and stops. test.headless runs the game on a recorded input trace and asserts against the final state, so the loop closes: patch, run, assert, repair.</span></div></div>
+          <div><i></i><div><b>Signatures are not retrieved, they are looked up</b><span>Search finds what to use; the exact API shape comes from a generated symbol index filtered to your engine version. Nothing about a function's signature is left to a similarity score.</span></div></div>
+        </div>
+        <div class="codeblk">
+<span class="c">$</span> claude mcp add synapse \<br>
+&nbsp;&nbsp;--transport http https://mcp.synapse.gg/p/SYN-04<br><br>
+<span class="c">&gt;</span> add three drones and raise the score when one is hit<br><br>
+<span class="c">graph.patch</span> &nbsp;add_node Spawn · connect OnStart<br>
+<span class="c">graph.patch</span> &nbsp;add_node OnHit · add_node AddScore<br>
+<span class="c">test.headless</span> 300 frames · <span class="s">drones == 3 &amp;&amp; score &gt; 0</span><br>
+<span class="c">result</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="s">PASS</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 03 RUNTIME ══════════════════════════════════════ -->
+<section class="entry" id="e03">
+  <div class="gut">
+    <span class="no">03</span><span class="rule"></span>
+    <span class="desig">RUN</span><span class="micro">Runtime</span>
+    <span class="state st-live">Live</span>
+  </div>
+  <div class="pane">
+    <h2 class="h2">An engine is only as good as the worst GPU it runs on.</h2>
+    <p class="lede">
+      Hosting shipped first on purpose: every session played through Synapse reports its adapter,
+      driver, frame timing and failures. That is how the renderer learns what it must actually
+      survive — and it is available to you today, whether or not your game was built with our engine.
+    </p>
+
+    <div class="split">
+      <div>
+        <span class="micro">Device grades — sample data</span>
+        <div class="scroll">
+          <table class="sheet">
+            <thead><tr><th>Device</th><th>Frame</th><th>Budget</th><th>Compile</th><th>Grade</th></tr></thead>
+            <tbody>
+              <tr><td class="dev">Apple M3 Pro<em>Metal 3 · Safari 26</em></td><td class="n">7.9 ms</td>
+                <td><span class="meter" data-v="11"></span></td><td><span class="meter" data-v="12"></span></td>
+                <td><span class="stamp s-pass">A</span></td></tr>
+              <tr><td class="dev">NVIDIA RTX 4070<em>566.36 · Chrome</em></td><td class="n">6.4 ms</td>
+                <td><span class="meter" data-v="12"></span></td><td><span class="meter" data-v="12"></span></td>
+                <td><span class="stamp s-pass">A</span></td></tr>
+              <tr><td class="dev">AMD Radeon 780M<em>24.12.1 · Edge</em></td><td class="n">14.6 ms</td>
+                <td><span class="meter o" data-v="6"></span></td><td><span class="meter" data-v="11"></span></td>
+                <td><span class="stamp s-warn">B</span></td></tr>
+              <tr><td class="dev">Adreno 740<em>Android 15 · Chrome</em></td><td class="n">31.8 ms</td>
+                <td><span class="meter o" data-v="3"></span></td><td><span class="meter o" data-v="3"></span></td>
+                <td><span class="stamp s-warn">B</span></td></tr>
+              <tr><td class="dev">Mali-G715<em>Android 14 · Chrome</em></td><td class="n">—</td>
+                <td><span class="meter" data-v="0"></span></td><td><span class="meter" data-v="0"></span></td>
+                <td><span class="stamp s-fail">C</span></td></tr>
+              <tr><td class="dev">Intel UHD 620<em>31.0.101 · Chrome</em></td><td class="n">48.2 ms</td>
+                <td><span class="meter" data-v="1"></span></td><td><span class="meter" data-v="10"></span></td>
+                <td><span class="stamp s-fail">C</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="foot-note code">Grade C never sees a black screen — it is served the recorded playthrough and your stated minimum spec.</p>
+      </div>
+
+      <div>
+        <div class="rep-head">
+          <span class="t">Pre-publish</span>
+          <span class="code c">SYN-04 · BUILD 7f3a91c</span>
+        </div>
+        <div class="rep"><span class="stamp s-pass">Pass</span>
+          <span><b>Entry point resolved</b><span class="d">WebGPU context requested at 240 ms</span></span><span class="v">OK</span></div>
+        <div class="rep"><span class="stamp s-warn">Warn</span>
+          <span><b>Payload over budget</b><span class="d">6.2 MB of it texture · KTX2 would return 4.4 MB</span></span><span class="v">11.9 MB</span></div>
+        <div class="rep"><span class="stamp s-fail">Fail</span>
+          <span><b>Shader compile failed on one adapter</b><span class="d">Mali-G715 · storageBarrier from a fragment stage</span></span><span class="v">1 / 7</span></div>
+        <div class="rep"><span class="stamp s-pass">Pass</span>
+          <span><b>Fallback recording captured</b><span class="d">15 s · served to adapters that cannot run the build</span></span><span class="v">2.4 MB</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 04 CATALOGUE ════════════════════════════════════ -->
+<section class="entry" id="e04">
+  <div class="gut">
+    <span class="no">04</span><span class="rule"></span>
+    <span class="desig">CAT</span><span class="micro">Catalogue</span>
+    <span class="state st-live">Live</span>
+  </div>
+  <div class="pane">
+    <h2 class="h2">Not one of these was built with our engine yet.</h2>
+    <p class="lede">Hosting works before the tools do. These arrived as uploaded builds from three different renderers — and the hardware they ran on is what entry 03 is measuring.</p>
+    <div class="cat">
+      <a class="card" href="#e04">
+        <div class="livery" style="background:var(--orange);color:var(--ink)">
+          <svg class="rd" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="#12100E"/><path d="M8.6 23.4 L13.6 18.4M18.4 13.6 L23.4 8.6" stroke="#FF4B00" stroke-width="4.2"/></svg>
+          <span class="cd">SYN-01</span></div>
+        <div class="meta"><span class="nm">Orbital Drift</span><span class="rn code">three.js · webgpu renderer</span>
+          <span class="stat"><span class="micro">Frame</span><span class="meter" data-v="11"></span></span>
+          <span class="stat"><span class="micro">Coverage</span><span class="meter" data-v="10"></span></span></div>
+      </a>
+      <a class="card" href="#e04">
+        <div class="livery" style="background:var(--ink);color:var(--cyan)">
+          <svg class="rd" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="#00E0FF"/><path d="M8.6 23.4 L13.6 18.4M18.4 13.6 L23.4 8.6" stroke="#12100E" stroke-width="4.2"/></svg>
+          <span class="cd">SYN-02</span></div>
+        <div class="meta"><span class="nm">Kelp</span><span class="rn code">babylon.js · compute particles</span>
+          <span class="stat"><span class="micro">Frame</span><span class="meter" data-v="12"></span></span>
+          <span class="stat"><span class="micro">Coverage</span><span class="meter o" data-v="7"></span></span></div>
+      </a>
+      <a class="card" href="#e04">
+        <div class="livery" style="background:var(--tint);color:var(--ink)">
+          <svg class="rd" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="#FF4B00"/><path d="M8.6 23.4 L13.6 18.4M18.4 13.6 L23.4 8.6" stroke="#12100E" stroke-width="4.2"/></svg>
+          <span class="cd">SYN-03</span></div>
+        <div class="meta"><span class="nm">Foundry Nine</span><span class="rn code">custom wgsl · deferred</span>
+          <span class="stat"><span class="micro">Frame</span><span class="meter o" data-v="8"></span></span>
+          <span class="stat"><span class="micro">Coverage</span><span class="meter" data-v="11"></span></span></div>
+      </a>
+      <a class="card" href="#e04">
+        <div class="livery" style="background:var(--cyan);color:var(--ink)">
+          <svg class="rd" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="#12100E"/><path d="M8.6 23.4 L13.6 18.4M18.4 13.6 L23.4 8.6" stroke="#00E0FF" stroke-width="4.2"/></svg>
+          <span class="cd">SYN-04</span></div>
+        <div class="meta"><span class="nm">Paper Terrain</span><span class="rn code">three.js · tsl nodes</span>
+          <span class="stat"><span class="micro">Frame</span><span class="meter" data-v="10"></span></span>
+          <span class="stat"><span class="micro">Coverage</span><span class="meter" data-v="12"></span></span></div>
+      </a>
+      <a class="card" href="#e04">
+        <div class="livery" style="background:var(--ink);color:var(--orange)">
+          <svg class="rd" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="#FF4B00"/><path d="M8.6 23.4 L13.6 18.4M18.4 13.6 L23.4 8.6" stroke="#12100E" stroke-width="4.2"/></svg>
+          <span class="cd">SYN-05</span></div>
+        <div class="meta"><span class="nm">Signal Loss</span><span class="rn code">custom ecs · raymarched</span>
+          <span class="stat"><span class="micro">Frame</span><span class="meter o" data-v="5"></span></span>
+          <span class="stat"><span class="micro">Coverage</span><span class="meter o" data-v="6"></span></span></div>
+      </a>
+      <a class="card" href="#e04">
+        <div class="livery" style="background:var(--orange);color:var(--paper)">
+          <svg class="rd" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="#EDEBE4"/><path d="M8.6 23.4 L13.6 18.4M18.4 13.6 L23.4 8.6" stroke="#12100E" stroke-width="4.2"/></svg>
+          <span class="cd">SYN-06</span></div>
+        <div class="meta"><span class="nm">Tessellate</span><span class="rn code">babylon.js · gpu picking</span>
+          <span class="stat"><span class="micro">Frame</span><span class="meter" data-v="12"></span></span>
+          <span class="stat"><span class="micro">Coverage</span><span class="meter" data-v="9"></span></span></div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 05 SYSTEM ═══════════════════════════════════════ -->
+<section class="entry" id="e05">
+  <div class="gut">
+    <span class="no">05</span><span class="rule"></span>
+    <span class="desig">SYS</span><span class="micro">System</span>
+  </div>
+  <div class="pane">
+    <h2 class="h2">Built back to front, on purpose.</h2>
+    <p class="lede">
+      The editor is the product; the host shipped first because it measures the hardware the renderer
+      will have to target. Each phase ships only when its check passes, and this page marks which
+      phase every claim on it belongs to.
+    </p>
+    <div class="sys">
+      <div>
+        <span class="ph">01</span><span class="flag st-live">Live</span>
+        <h3>Hub</h3>
+        <p>Upload, sandboxed playback, capability gating, device telemetry.</p>
+        <p class="chk code">CHECK — an outside developer publishes a build unaided.</p>
+      </div>
+      <div>
+        <span class="ph">02</span><span class="flag st-build">In build</span>
+        <h3>Engine</h3>
+        <p>Clustered forward WebGPU renderer, PBR, glTF and KTX2, deterministic ECS.</p>
+        <p class="chk code">CHECK — same input trace, same final state, 100 runs.</p>
+      </div>
+      <div>
+        <span class="ph">03</span><span class="flag st-plan">Planned</span>
+        <h3>Studio</h3>
+        <p>3D viewport with gizmos, event and material graphs, in-place play.</p>
+        <p class="chk code">CHECK — a playable 3D game built without writing code.</p>
+      </div>
+      <div>
+        <span class="ph">04</span><span class="flag st-plan">Planned</span>
+        <h3>Agents</h3>
+        <p>The MCP endpoint and the retrieval index behind entry 02.</p>
+        <p class="chk code">CHECK — an agent adds a feature and passes its own headless test.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 06 IDENTITY ═════════════════════════════════════ -->
+<section class="entry" id="e06">
+  <div class="gut">
+    <span class="no">06</span><span class="rule"></span>
+    <span class="desig">IDN</span><span class="micro">Identity</span>
+  </div>
+  <div class="pane">
+    <h2 class="h2">A signal crossing a gap, stamped on a roundel.</h2>
+    <p class="lede">
+      One graph edge, cut at the synapse, with the signal mid-jump — set in a team roundel, because
+      every build here gets a code, a livery and a spec sheet.
+    </p>
+    <div class="idg">
+      <div>
+        <span class="micro">Primary</span>
+        <div class="lock">
+          <svg width="52" height="52" viewBox="0 0 32 32" aria-hidden="true">
+            <circle cx="16" cy="16" r="15.4" fill="#FF4B00"/>
+            <path d="M8.6 23.4 L13.6 18.4M18.4 13.6 L23.4 8.6" stroke="#12100E" stroke-width="4.2"/>
+            <rect x="14" y="14" width="4" height="4" transform="rotate(45 16 16)" fill="#00E0FF"/>
+          </svg>
+          <span class="wm">Synapse<span class="tm">&trade;</span></span>
+        </div>
+        <span class="code">SYN-MARK-01 · flat only, never gradient</span>
+      </div>
+      <div>
+        <span class="micro">Reversals</span>
+        <div class="on-o">
+          <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">
+            <circle cx="16" cy="16" r="15.4" fill="#12100E"/>
+            <path d="M8.6 23.4 L13.6 18.4M18.4 13.6 L23.4 8.6" stroke="#FF4B00" stroke-width="4.2"/>
+          </svg><span class="wm">Synapse</span>
+        </div>
+        <div class="on-k">
+          <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">
+            <circle cx="16" cy="16" r="15.4" fill="#EDEBE4"/>
+            <path d="M8.6 23.4 L13.6 18.4M18.4 13.6 L23.4 8.6" stroke="#12100E" stroke-width="4.2"/>
+          </svg><span class="wm">Synapse</span>
+        </div>
+      </div>
+      <div>
+        <span class="micro">Inks</span>
+        <div class="swatches">
+          <span class="sw" style="background:#EDEBE4;border:1px solid #12100E">PAPER<br>#EDEBE4</span>
+          <span class="sw" style="background:#12100E;color:#EDEBE4">INK<br>#12100E</span>
+          <span class="sw" style="background:#FF4B00;color:#12100E">SIGNAL<br>#FF4B00</span>
+          <span class="sw" style="background:#00E0FF;color:#12100E">LIVE<br>#00E0FF</span>
+        </div>
+        <span class="code">Four inks. No fifth. Failure is hatched, never coloured.</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="close">
+  <h2>Wire it up. Then let something else hold the other end.</h2>
+  <div class="go">
+    <a class="p" href="#e01">Open the graph</a>
+    <a class="s" href="#e02">Read the MCP spec</a>
+  </div>
+</div>
+
+</main>
+
+<footer>
+  <div class="fl">
+    <svg width="20" height="20" viewBox="0 0 32 32" aria-hidden="true">
+      <circle cx="16" cy="16" r="15.4" fill="#12100E"/>
+      <path d="M8.6 23.4 L13.6 18.4M18.4 13.6 L23.4 8.6" stroke="#EDEBE4" stroke-width="4.2"/>
+    </svg>
+    <a href="#e01">Graph</a><a href="#e02">Agents</a><a href="#e03">Runtime</a>
+    <a href="#e04">Catalogue</a><a href="#e05">System</a><a href="#top">Status</a>
+    <a href="#top">Terms</a><a href="#top">Privacy</a>
+  </div>
+  <p class="legal">
+    Synapse&trade; is an independent project and is not affiliated with, endorsed by, or acting for any
+    GPU vendor, browser vendor, or engine named on this page. Entries are marked live, in build, or
+    planned — treat planned entries as intent, not availability. The hero demo's graph edits and rendering
+    are real; the agent's replies are pre-scripted. Figures in entries 03 and 04 are sample data for
+    layout. Device telemetry is per session, opt-out, never shared between projects and never sold.
+    SYN-SYS-01 · Sheet 1 of 1 · Rev D.
+  </p>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var $ = function(id){ return document.getElementById(id); };
+
+  /* segmented meters */
+  var meters = document.querySelectorAll(".meter");
+  for (var m=0;m<meters.length;m++){
+    var v = parseInt(meters[m].getAttribute("data-v"),10) || 0, h = "";
+    for (var s=0;s<12;s++) h += "<i class='" + (s<v ? "on" : "") + "'></i>";
+    meters[m].innerHTML = h;
+  }
+
+  /* ══ sim state — what the graph actually controls ════ */
+  var sim = { count:1, radius:0, speed:1.0, flash:false };
+
+  /* ══ node graph ═════════════════════════════════════ */
+  var NODES = {
+    start:{ x:10,  y:10,  kind:"evt",  t:"On Start", pins:[], step:0 },
+    spawn:{ x:152, y:10,  kind:"act",  t:"Spawn",    pins:[["count","1"]], step:0 },
+    scat: { x:294, y:10,  kind:"pure", t:"Scatter",  pins:[["radius","3.0"]], step:1 },
+    tick: { x:10,  y:96,  kind:"evt",  t:"On Tick",  pins:[], step:0 },
+    orbit:{ x:152, y:96,  kind:"act",  t:"Orbit",    pins:[["speed","1.0"]], step:0 },
+    hit:  { x:10,  y:182, kind:"evt",  t:"On Hit",   pins:[], step:2 },
+    boost:{ x:152, y:182, kind:"act",  t:"Boost",    pins:[["mul","1.8"]], step:2 },
+    tint: { x:294, y:182, kind:"act",  t:"Tint",     pins:[["ink","signal"]], step:3 }
+  };
+  var WIRES = [
+    ["start","spawn",0], ["spawn","scat",1],
+    ["tick","orbit",0], ["hit","boost",2], ["boost","tint",3]
+  ];
+  var graphEl = $("graph"), wiresEl = $("wires"), stepNow = 0;
+
+  function nodeH(n){ return 24 + n.pins.length*19; }
+
+  function renderGraph(step, fresh){
+    /* nodes */
+    var k;
+    for (k in NODES){
+      var n = NODES[k], el = document.getElementById("nd-"+k);
+      if (n.step > step){ if (el) el.remove(); continue; }
+      if (!el){
+        el = document.createElement("div");
+        el.id = "nd-"+k;
+        el.className = "node " + n.kind;
+        var html = "<h4>"+n.t+"</h4>";
+        for (var p=0;p<n.pins.length;p++)
+          html += "<div class='pin'><s></s>"+n.pins[p][0]+"<em id='pv-"+k+"-"+p+"'>"+n.pins[p][1]+"</em></div>";
+        el.innerHTML = html;
+        el.style.left = n.x+"px"; el.style.top = n.y+"px";
+        graphEl.appendChild(el);
+        if (fresh && n.step === step && step > 0){
+          el.classList.add("new");
+          if (!reduce) setTimeout(function(e){ return function(){ e.classList.remove("new"); }; }(el), 1400);
+        }
+      }
+    }
+    /* wires */
+    var d = "";
+    for (var w=0;w<WIRES.length;w++){
+      var a = NODES[WIRES[w][0]], b = NODES[WIRES[w][1]];
+      if (WIRES[w][2] > step) continue;
+      var x1 = a.x+128, y1 = a.y + nodeH(a)/2;
+      var x2 = b.x,     y2 = b.y + nodeH(b)/2;
+      var mx = (x1+x2)/2;
+      d += "<path d='M"+x1+" "+y1+" C"+mx+" "+y1+","+mx+" "+y2+","+x2+" "+y2+
+           "' fill='none' stroke='#FF4B00' stroke-width='2'/>";
+      d += "<rect x='"+(x2-4)+"' y='"+(y2-3)+"' width='6' height='6' fill='#00E0FF'/>";
+    }
+    wiresEl.innerHTML = d;
+  }
+
+  function setPin(k, i, val){
+    var el = document.getElementById("pv-"+k+"-"+i);
+    if (el) el.textContent = val;
+    NODES[k].pins[i][1] = val;
+  }
+
+  var LOG = {
+    1:["graph.patch  add_node Scatter · connect Spawn.at",
+       "test.headless  300 frames · drones == 4 · PASS"],
+    2:["graph.patch  add_node OnHit · add_node Boost",
+       "test.headless  300 frames · speed rises on hit · PASS"],
+    3:["graph.patch  add_node Tint · connect Boost.then",
+       "test.headless  300 frames · tint applied · PASS"]
+  };
+  function writeLog(step){
+    var el = $("log");
+    if (step === 0){
+      el.innerHTML = "<div class='idle'>Pick a prompt. The graph edit and the running game are real; only the agent's reply is scripted.</div>";
+      return;
+    }
+    el.innerHTML = "<div>" + LOG[step][0] + "</div>";
+    var second = function(){ el.innerHTML += "<div class='ok'>" + LOG[step][1] + "</div>"; };
+    if (reduce) second(); else setTimeout(second, 520);
+  }
+
+  function applyStep(step){
+    stepNow = step;
+    sim.count  = step >= 1 ? 4 : 1;
+    sim.radius = step >= 1 ? 1.35 : 0;
+    sim.speed  = step >= 2 ? 1.9 : 1.0;
+    sim.flash  = step >= 3;
+    setPin("spawn", 0, step >= 1 ? "4" : "1");
+    if (step >= 0 && NODES.orbit) setPin("orbit", 0, step >= 2 ? "1.9" : "1.0");
+    renderGraph(step, true);
+    writeLog(step);
+    var btns = document.querySelectorAll(".chips button");
+    for (var i=0;i<btns.length;i++){
+      var s = parseInt(btns[i].getAttribute("data-step"),10);
+      btns[i].disabled = (s > 0 && s <= step);
+    }
+  }
+
+  var chips = document.querySelectorAll(".chips button");
+  for (var c=0;c<chips.length;c++){
+    chips[c].addEventListener("click", function(){
+      applyStep(parseInt(this.getAttribute("data-step"),10));
+    });
+  }
+  renderGraph(0, false);
+
+  /* ══ mesh ═══════════════════════════════════════════ */
+  function icosa(){
+    var t=(1+Math.sqrt(5))/2;
+    var v=[[-1,t,0],[1,t,0],[-1,-t,0],[1,-t,0],[0,-1,t],[0,1,t],
+           [0,-1,-t],[0,1,-t],[t,0,-1],[t,0,1],[-t,0,-1],[-t,0,1]];
+    var f=[[0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],[1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],
+           [3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],[4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1]];
+    for (var i=0;i<v.length;i++){
+      var l=Math.hypot(v[i][0],v[i][1],v[i][2]); v[i]=[v[i][0]/l,v[i][1]/l,v[i][2]/l];
+    }
+    var out=[];
+    for (var k=0;k<f.length;k++){
+      var a=v[f[k][0]],b=v[f[k][1]],c2=v[f[k][2]];
+      var ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2];
+      var wx=c2[0]-a[0],wy=c2[1]-a[1],wz=c2[2]-a[2];
+      var nx=uy*wz-uz*wy,ny=uz*wx-ux*wz,nz=ux*wy-uy*wx;
+      var nl=Math.hypot(nx,ny,nz)||1;
+      out.push({p:[a,b,c2], n:[nx/nl,ny/nl,nz/nl]});
+    }
+    return out;
+  }
+  var TRIS = icosa(), MAXI = 4;
+
+  /* instance transforms driven by sim */
+  function instances(now){
+    var out=[], n=sim.count, t=now/1000;
+    for (var i=0;i<n;i++){
+      var ang = t*sim.speed*0.9 + i*(Math.PI*2/n);
+      var r = sim.radius;
+      var sc = n > 1 ? 0.46 : 0.92;
+      var tint = [1.0,0.294,0.0];
+      if (sim.flash){
+        var f = 0.5 + 0.5*Math.sin(t*3.2 + i*1.7);
+        tint = [1.0*(1-f), 0.294 + 0.584*f, 0.0 + 1.0*f];
+      }
+      out.push({
+        pos:[Math.cos(ang)*r, Math.sin(t*1.4 + i)*0.22, Math.sin(ang)*r],
+        rot: t*0.7 + i*0.9, sc:sc, tint:tint
+      });
+    }
+    return out;
+  }
+
+  /* build world-space vertex data on the CPU: pos,normal,tint */
+  var VSTRIDE = 9;
+  var vbuf = new Float32Array(MAXI * TRIS.length * 3 * VSTRIDE);
+  function buildVerts(insts){
+    var o = 0;
+    for (var i=0;i<insts.length;i++){
+      var ins = insts[i], ca=Math.cos(ins.rot), sa=Math.sin(ins.rot);
+      for (var k=0;k<TRIS.length;k++){
+        var tri = TRIS[k];
+        for (var j=0;j<3;j++){
+          var p = tri.p[j];
+          var px = (p[0]*ca - p[2]*sa)*ins.sc + ins.pos[0];
+          var py = p[1]*ins.sc + ins.pos[1];
+          var pz = (p[0]*sa + p[2]*ca)*ins.sc + ins.pos[2];
+          var n = tri.n;
+          vbuf[o++]=px; vbuf[o++]=py; vbuf[o++]=pz;
+          vbuf[o++]=n[0]*ca - n[2]*sa; vbuf[o++]=n[1]; vbuf[o++]=n[0]*sa + n[2]*ca;
+          vbuf[o++]=ins.tint[0]; vbuf[o++]=ins.tint[1]; vbuf[o++]=ins.tint[2];
+        }
+      }
+    }
+    return o / VSTRIDE;
+  }
+
+  function persp(fov,asp,n,f){ var t=1/Math.tan(fov/2);
+    return new Float32Array([t/asp,0,0,0, 0,t,0,0, 0,0,f/(n-f),-1, 0,0,n*f/(n-f),0]); }
+
+  /* ══ telemetry ══════════════════════════════════════ */
+  var canvas=$("stage"), spark=$("spark"), sctx=spark.getContext("2d");
+  var times=[], t0=performance.now(), frames=0;
+  $("r-session").textContent = Math.random().toString(36).slice(2,8).toUpperCase();
+  $("r-dpr").textContent = (window.devicePixelRatio||1).toFixed(2)+"x";
+
+  function pushFrame(dt){
+    times.push(dt); if (times.length>90) times.shift();
+    if (++frames % 12 === 0){
+      var a=0; for (var i=0;i<times.length;i++) a+=times[i];
+      $("r-frame").textContent = (a/times.length).toFixed(1)+" ms";
+      var s=times.slice().sort(function(x,y){return y-x;});
+      $("r-low").textContent = s[Math.floor(s.length*0.01)].toFixed(1)+" ms";
+      drawSpark();
+    }
+  }
+  function drawSpark(){
+    var dpr=Math.min(window.devicePixelRatio||1,2), w=120, h=16;
+    if (spark.width!==Math.round(w*dpr)){ spark.width=Math.round(w*dpr); spark.height=Math.round(h*dpr); }
+    sctx.setTransform(dpr,0,0,dpr,0,0); sctx.clearRect(0,0,w,h);
+    var bw=Math.max(1,w/90-0.5);
+    for (var i=0;i<times.length;i++){
+      var bh=Math.max(1, Math.min(times[i],50)/50*h);
+      sctx.fillStyle = times[i]<=16.7 ? "#00E0FF" : (times[i]<=33.3 ? "#FF4B00" : "#EDEBE4");
+      sctx.fillRect(i*(w/90), h-bh, bw, bh);
+    }
+  }
+  function setTag(txt, fb){
+    var el=$("vp-tag"); el.textContent=txt; el.className = fb ? "live fb" : "live";
+    $("r-backend").textContent = fb ? "canvas2d" : "webgpu";
+  }
+
+  /* ══ canvas2d fallback ══════════════════════════════ */
+  function run2D(reason){
+    setTag("FALLBACK", true);
+    $("r-adapter").textContent = reason;
+    var ctx=canvas.getContext("2d"), last=performance.now();
+    function frame(now){
+      var dt=now-last; last=now; pushFrame(dt);
+      var dpr=Math.min(window.devicePixelRatio||1,2);
+      var w=canvas.clientWidth||400, h=176;
+      if (canvas.width!==Math.round(w*dpr)){ canvas.width=Math.round(w*dpr); canvas.height=Math.round(h*dpr); }
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      ctx.fillStyle="#0A0908"; ctx.fillRect(0,0,w,h);
+      var insts=instances(reduce ? 1400 : now-t0), sc=Math.min(w,h)*0.62, out=[];
+      for (var i=0;i<insts.length;i++){
+        var ins=insts[i], ca=Math.cos(ins.rot), sa=Math.sin(ins.rot);
+        for (var k=0;k<TRIS.length;k++){
+          var tri=TRIS[k], pts=[], zs=0, nz=0;
+          for (var j=0;j<3;j++){
+            var p=tri.p[j];
+            var px=(p[0]*ca-p[2]*sa)*ins.sc+ins.pos[0];
+            var py=p[1]*ins.sc+ins.pos[1];
+            var pz=(p[0]*sa+p[2]*ca)*ins.sc+ins.pos[2];
+            var d=1/(3.2+pz); zs+=pz;
+            pts.push([w/2+px*sc*d*1.6, h/2-py*sc*d*1.6]);
+          }
+          var n=tri.n;
+          var nx=n[0]*ca-n[2]*sa; nz=n[0]*sa+n[2]*ca;
+          var lam=Math.max(0, nx*0.35 + n[1]*0.82 + nz*0.45);
+          out.push({pts:pts, z:zs/3, q:Math.floor(lam*4)/4, tint:ins.tint, face:nz});
+        }
+      }
+      out.sort(function(p,q){ return p.z-q.z; });
+      for (var o2=0;o2<out.length;o2++){
+        var f=out[o2];
+        var r=Math.round(18+(f.tint[0]*255-18)*f.q);
+        var g=Math.round(16+(f.tint[1]*255-16)*f.q);
+        var b=Math.round(14+(f.tint[2]*255-14)*f.q);
+        ctx.beginPath();
+        ctx.moveTo(f.pts[0][0],f.pts[0][1]);
+        ctx.lineTo(f.pts[1][0],f.pts[1][1]);
+        ctx.lineTo(f.pts[2][0],f.pts[2][1]);
+        ctx.closePath();
+        ctx.fillStyle="rgb("+r+","+g+","+b+")"; ctx.fill();
+        ctx.strokeStyle="#0A0908"; ctx.lineWidth=1.2; ctx.stroke();
+      }
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  /* ══ webgpu ═════════════════════════════════════════ */
+  var WGSL = [
+    "struct U { vp: mat4x4<f32> };",
+    "@group(0) @binding(0) var<uniform> u: U;",
+    "struct VO { @builtin(position) pos: vec4f, @location(0) nrm: vec3f, @location(1) tint: vec3f };",
+    "@vertex fn vs(@location(0) p: vec3f, @location(1) n: vec3f, @location(2) c: vec3f) -> VO {",
+    "  var o: VO;",
+    "  o.pos = u.vp * vec4f(p, 1.0);",
+    "  o.nrm = n; o.tint = c;",
+    "  return o;",
+    "}",
+    "@fragment fn fs(i: VO) -> @location(0) vec4f {",
+    "  let n = normalize(i.nrm);",
+    "  let l = normalize(vec3f(0.35, 0.82, 0.45));",
+    "  let q = floor(max(dot(n, l), 0.0) * 4.0) / 4.0;",
+    "  let ink = vec3f(0.070, 0.063, 0.055);",
+    "  var c = mix(ink, i.tint, q);",
+    "  let rim = pow(1.0 - abs(n.z), 6.0);",
+    "  c = mix(c, vec3f(0.0, 0.878, 1.0), step(0.6, rim));",
+    "  return vec4f(c, 1.0);",
+    "}"
+  ].join("\n");
+
+  function runGPU(){
+    if (!navigator.gpu){ run2D("navigator.gpu unavailable"); return; }
+    navigator.gpu.requestAdapter().then(function(ad){
+      if (!ad) throw new Error("no adapter");
+      return ad.requestDevice().then(function(dev){ return {ad:ad, dev:dev}; });
+    }).then(function(g){
+      var device=g.dev, ctx=canvas.getContext("webgpu");
+      if (!ctx) throw new Error("no webgpu context");
+      var info=g.ad.info||{}, nm=info.description||info.architecture||info.vendor||"";
+      $("r-adapter").textContent = nm ? String(nm).slice(0,34) : "name withheld";
+      setTag("WEBGPU", false);
+
+      var fmt=navigator.gpu.getPreferredCanvasFormat();
+      ctx.configure({device:device, format:fmt, alphaMode:"opaque"});
+
+      var vbo=device.createBuffer({ size:vbuf.byteLength,
+        usage:GPUBufferUsage.VERTEX|GPUBufferUsage.COPY_DST });
+      var ubo=device.createBuffer({ size:64,
+        usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST });
+      var mod=device.createShaderModule({code:WGSL});
+      var pipe=device.createRenderPipeline({
+        layout:"auto",
+        vertex:{ module:mod, entryPoint:"vs", buffers:[{ arrayStride:VSTRIDE*4, attributes:[
+          {shaderLocation:0, offset:0,  format:"float32x3"},
+          {shaderLocation:1, offset:12, format:"float32x3"},
+          {shaderLocation:2, offset:24, format:"float32x3"}]}]},
+        fragment:{ module:mod, entryPoint:"fs", targets:[{format:fmt}] },
+        primitive:{ topology:"triangle-list", cullMode:"back" },
+        depthStencil:{ format:"depth24plus", depthWriteEnabled:true, depthCompare:"less" }
+      });
+      var bind=device.createBindGroup({ layout:pipe.getBindGroupLayout(0),
+        entries:[{binding:0, resource:{buffer:ubo}}] });
+
+      var depth=null, dw=0, dh=0, last=performance.now();
+      function frame(now){
+        var dt=now-last; last=now; pushFrame(dt);
+        var dpr=Math.min(window.devicePixelRatio||1,2);
+        var w=Math.max(1,Math.round((canvas.clientWidth||400)*dpr));
+        var h=Math.max(1,Math.round(176*dpr));
+        if (canvas.width!==w||canvas.height!==h){ canvas.width=w; canvas.height=h; }
+        if (!depth||dw!==w||dh!==h){
+          if (depth) depth.destroy();
+          depth=device.createTexture({size:[w,h], format:"depth24plus",
+            usage:GPUTextureUsage.RENDER_ATTACHMENT});
+          dw=w; dh=h;
+        }
+        var count = buildVerts(instances(reduce ? 1400 : now-t0));
+        device.queue.writeBuffer(vbo, 0, vbuf, 0, count*VSTRIDE);
+
+        /* view-projection — the view is a pure z translation, so P*V only
+           rewrites the last column: col3 = tz * P.col2 + P.col3 */
+        var tz = -3.2;
+        var proj = persp(0.9, w/h, 0.1, 100);
+        var vp = new Float32Array(proj);
+        vp[12] = 0;
+        vp[13] = 0;
+        vp[14] = tz * proj[10] + proj[14];
+        vp[15] = tz * proj[11];
+        device.queue.writeBuffer(ubo, 0, vp);
+
+        var enc=device.createCommandEncoder();
+        var pass=enc.beginRenderPass({
+          colorAttachments:[{ view:ctx.getCurrentTexture().createView(),
+            clearValue:{r:0.039,g:0.035,b:0.031,a:1}, loadOp:"clear", storeOp:"store" }],
+          depthStencilAttachment:{ view:depth.createView(), depthClearValue:1,
+            depthLoadOp:"clear", depthStoreOp:"store" }
+        });
+        pass.setPipeline(pipe); pass.setBindGroup(0,bind);
+        pass.setVertexBuffer(0,vbo); pass.draw(count); pass.end();
+        device.queue.submit([enc.finish()]);
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+      device.lost.then(function(){ run2D("device lost — recovered on cpu"); });
+    }).catch(function(e){
+      run2D(String(e && e.message ? e.message : e).slice(0,34));
+    });
+  }
+
+  try { runGPU(); } catch(e){ run2D("init failed"); }
+  window.addEventListener("resize", drawSpark);
+})();
+</script>
+
+</body>
+</html>
