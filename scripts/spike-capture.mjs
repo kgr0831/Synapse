@@ -124,8 +124,11 @@ await writeFile(`${OUT}/result.json`, JSON.stringify(results, null, 2))
 const winners = results.filter((r) => r.ok)
 console.log('\n──────── S1 verdict ────────')
 if (!winners.length) {
-  console.log('FAIL  no flag set produced a WebGPU adapter in headless Chromium.')
+  console.log('FAIL  no configuration produced a WebGPU adapter here.')
   console.log('      Fallback per IMPL.md: run capture on a GPU-backed machine.')
+  console.log(`\nartifacts → ${OUT}/`)
+  /* A spike whose CI run is green either way answers nothing. */
+  process.exit(1)
 } else {
   const w = winners[0]
   const soft = isSoftware(w.adapter)

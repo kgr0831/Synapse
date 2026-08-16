@@ -242,8 +242,10 @@ canvas#stage{ display:block; width:100%; height:176px; background:#0A0908; }
 .card .meta{ padding:12px; display:grid; gap:8px; }
 .card .nm{ font-family:var(--display); font-size:22px; text-transform:uppercase; line-height:.9; }
 .card .rn{ color:#57524A; }
-.card .stat{ display:flex; align-items:center; gap:8px; }
-.card .stat .micro{ width:68px; flex:none; color:#6B665C; }
+/* No fixed px width here: the label is text, and a px box is a bet on font
+   metrics that loses wherever the display stack falls back. */
+.card .stat{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.card .stat .micro{ flex:none; color:#6B665C; }
 
 /* ══ system (05) ═══════════════════════════════════════ */
 .sys{ display:grid; grid-template-columns:repeat(4,1fr); border-left:2px solid var(--ink); margin-top:18px; }
@@ -259,7 +261,10 @@ canvas#stage{ display:block; width:100%; height:176px; background:#0A0908; }
 .idg{ display:grid; grid-template-columns:repeat(3,1fr); border-left:2px solid var(--ink); margin-top:20px; }
 .idg > div{ border-right:2px solid var(--ink); padding:20px; display:grid; gap:16px; align-content:start; }
 .lock{ display:flex; align-items:center; gap:12px; }
-.lock .wm{ font-family:var(--display); font-size:38px; text-transform:uppercase; line-height:.8; }
+/* Fallback faces are far wider than the condensed display stack, so the
+   lockup scales rather than pushing out of its column. */
+.lock .wm{ font-family:var(--display); font-size:clamp(24px,3.2vw,38px);
+  text-transform:uppercase; line-height:.8; }
 .on-o{ background:var(--orange); padding:14px; display:flex; align-items:center; gap:10px; }
 .on-k{ background:var(--ink); padding:14px; display:flex; align-items:center; gap:10px; color:var(--paper); }
 .on-k .wm,.on-o .wm{ font-size:26px; }
@@ -297,6 +302,11 @@ footer{ padding:22px 30px 44px; display:grid; gap:16px; }
   .split > div:last-child{ padding-left:0; padding-top:22px; }
   .cat,.sys,.idg{ grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
+/* Nav links go before the viewport does: with fallback fonts the row is wider
+   than it looks on a machine that has the display stack installed. */
+@media (max-width:900px){
+  .nav a.n{ display:none; }
+}
 @media (max-width:660px){
   body{ padding-left:0; }
   .spine{ display:none; }
@@ -311,8 +321,10 @@ footer{ padding:22px 30px 44px; display:grid; gap:16px; }
   .pane{ padding:20px 16px 26px; }
   .hero-l{ padding:24px 16px 30px; }
   .cat,.sys,.idg{ grid-template-columns:minmax(0,1fr); }
-  .nav{ padding:0 14px; gap:14px; }
-  .nav a.n{ display:none; }
+  .nav{ padding:0 14px; gap:12px; }
+  .nav .brand .wm{ font-size:22px; }
+  .nav .end a:not(.go){ display:none; }
+  .nav .end a{ padding:0 12px; }
   .hero .strip{ flex-wrap:wrap; }
   .hero .strip div{ flex:1 0 50%; }
 }

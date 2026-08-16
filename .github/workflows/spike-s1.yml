@@ -38,8 +38,18 @@ jobs:
           done
           echo "preview server never came up:"; cat preview.log; exit 1
 
+      # Non-zero exit means no configuration got an adapter, so a green run
+      # here is the actual S1 answer rather than "the script ran".
       - name: Run spike under Xvfb
         run: xvfb-run -a --server-args="-screen 0 1280x800x24" node scripts/spike-capture.mjs http://localhost:4173/status/webgpu/
+
+      - name: Publish the verdict to the run summary
+        if: always()
+        run: |
+          echo '## Spike S1' >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          cat artifacts/spike-s1/result.json 2>/dev/null | head -c 12000 >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
       - uses: actions/upload-artifact@v4
         if: always()

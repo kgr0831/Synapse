@@ -14,13 +14,30 @@ const BASE = (process.argv[2] ?? 'http://localhost:5173').replace(/\/$/, '')
 const PAGES = ['/', '/status/webgpu/']
 const WIDTHS = [375, 768, 1280, 1920]
 
+/* The display stack (Haettenschweiler / Impact / Arial Narrow) exists on
+   Windows and macOS but not on a stock Linux box, and the fallback has wider
+   metrics. Checking only the pretty case hides breakage from most Linux
+   visitors — and from CI, which is where this first showed up. */
+const FONT_MODES = [
+  { name: 'brand', css: null },
+  { name: 'fallback', css: ':root{--display:sans-serif !important;--narrow:sans-serif !important;}' }
+]
+
 const audit = () => {
   const problems = []
   const all = [...document.querySelectorAll('body *')]
 
+  const describe = (el) => {
+    const one = (e) => e.tagName.toLowerCase() +
+      (e.className ? '.' + String(e.className).trim().split(/\s+/).join('.') : '')
+    const chain = []
+    for (let e = el, i = 0; e && e !== document.body && i < 3; e = e.parentElement, i++) chain.unshift(one(e))
+    return chain.join(' > ')
+  }
+
   for (const el of all) {
     const cs = getComputedStyle(el)
-    const where = el.tagName.toLowerCase() + (el.className ? '.' + String(el.className).trim().split(/\s+/).join('.') : '')
+    const where = describe(el)
 
     // content wider than its box, in something that cannot scroll
     if (cs.overflowX !== 'auto' && cs.overflowX !== 'scroll' &&
@@ -36,6 +53,14 @@ const audit = () => {
         problems.push({ kind: 'squeezed', where, detail: `${Math.round(r.width)}px wide for ${text.length} chars` })
       }
     }
+
+    // a fixed px box holding text is a font-metric bet that loses on Linux
+    if (!el.children.length && cs.overflowX === 'visible' &&
+        el.scrollWidth > el.clientWidth + 2 && cs.width.endsWith('px') &&
+        parseFloat(cs.width) === Math.round(el.clientWidth)) {
+      problems.push({ kind: 'fixed-width-text', where,
+        detail: `css width ${cs.width} but content needs ${el.scrollWidth}px` })
+    }
   }
 
   if (document.body.scrollWidth > window.innerWidth + 1) {
@@ -49,20 +74,23 @@ const browser = await chromium.launch()
 const page = await browser.newPage()
 let failures = 0
 
-for (const path of PAGES) {
-  for (const width of WIDTHS) {
-    await page.setViewportSize({ width, height: 900 })
-    await page.goto(BASE + path, { waitUntil: 'load' })
-    await page.waitForTimeout(150)
+for (const mode of FONT_MODES) {
+  for (const path of PAGES) {
+    for (const width of WIDTHS) {
+      await page.setViewportSize({ width, height: 900 })
+      await page.goto(BASE + path, { waitUntil: 'load' })
+      if (mode.css) await page.addStyleTag({ content: mode.css })
+      await page.waitForTimeout(150)
 
-    const problems = await page.evaluate(audit)
-    const label = `${path} @ ${width}`
-    if (!problems.length) {
-      console.log(`  ok    ${label}`)
-    } else {
-      failures += problems.length
-      console.log(`  FAIL  ${label}`)
-      for (const p of problems) console.log(`        ${p.kind}  ${p.where}  (${p.detail})`)
+      const problems = await page.evaluate(audit)
+      const label = `${mode.name.padEnd(8)} ${path} @ ${width}`
+      if (!problems.length) {
+        console.log(`  ok    ${label}`)
+      } else {
+        failures += problems.length
+        console.log(`  FAIL  ${label}`)
+        for (const p of problems) console.log(`        ${p.kind}  ${p.where}  (${p.detail})`)
+      }
     }
   }
 }
